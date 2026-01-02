@@ -1,6 +1,4 @@
-/**
- * Check if backend is running and display connection status
- */
+
 async function checkBackendConnection() {
     const statusElement = document.getElementById('backend-status');
     
@@ -20,10 +18,6 @@ async function checkBackendConnection() {
         console.error('Backend connection error:', error);
     }
 }
-
-/**
- * Handle file selection and update UI
- */
 function handleFileSelect(inputId, displayId) {
     const input = document.getElementById(inputId);
     const display = document.getElementById(displayId);
@@ -33,7 +27,6 @@ function handleFileSelect(inputId, displayId) {
         const file = event.target.files[0];
         
         if (file) {
-            // Show file name and size
             const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
             display.textContent = `${file.name} (${fileSizeMB} MB)`;
             display.classList.add('file-selected');
