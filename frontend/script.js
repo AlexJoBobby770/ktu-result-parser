@@ -31,61 +31,43 @@ function handleFileSelect(inputId, displayId) {
             display.textContent = `${file.name} (${fileSizeMB} MB)`;
             display.classList.add('file-selected');
         } else {
-            // Reset if no file selected
             display.textContent = 'No file selected';
             display.classList.remove('file-selected');
         }
-        
-        // Check if both files are selected to enable upload button
+
         checkBothFilesSelected();
     });
 }
 
-/**
- * Check if both files are selected and enable/disable upload button
- */
 function checkBothFilesSelected() {
     const pdfFile = document.getElementById('pdfFile').files[0];
     const masterFile = document.getElementById('masterFile').files[0];
     const uploadBtn = document.getElementById('uploadBtn');
-    
-    // Enable button only if both files are selected
     if (pdfFile && masterFile) {
         uploadBtn.disabled = false;
     } else {
         uploadBtn.disabled = true;
     }
 }
-
-/**
- * Display status message to user
- */
 function showStatus(message, type) {
     const statusElement = document.getElementById('uploadStatus');
-    
-    // Remove all existing classes
+
     statusElement.className = 'upload-status';
-    
-    // Add new classes based on type
+
     statusElement.classList.add('show', type);
     statusElement.textContent = message;
 }
 
-/**
- * Handle file upload to backend
- */
 async function handleUpload() {
     const pdfFile = document.getElementById('pdfFile').files[0];
     const masterFile = document.getElementById('masterFile').files[0];
     const uploadBtn = document.getElementById('uploadBtn');
-    
-    // Validate files exist (should always be true because button is disabled otherwise)
+
     if (!pdfFile || !masterFile) {
         showStatus('Please select both files', 'error');
         return;
     }
-    
-    // Validate file types
+
     if (!pdfFile.name.toLowerCase().endsWith('.pdf')) {
         showStatus('Please select a valid PDF file', 'error');
         return;
