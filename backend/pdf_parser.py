@@ -1,26 +1,9 @@
-"""
-PDF Parser for KTU Result Files
-Extracts student results using regex patterns
-"""
-
 import re
 from typing import List, Dict, Optional
 import PyPDF2
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:
-    """
-    Extract all text from a PDF file.
-    
-    Args:
-        pdf_path: Path to the PDF file
-        
-    Returns:
-        Extracted text as a single string
-        
-    Raises:
-        Exception: If PDF cannot be read
-    """
     try:
         with open(pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
@@ -36,24 +19,6 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
 
 def parse_ktu_results(pdf_text: str) -> List[Dict]:
-    """
-    Parse KTU result data from extracted PDF text.
-    
-    This is a SAMPLE parser - you'll need to adjust regex patterns
-    based on your actual KTU result PDF format.
-    
-    Expected PDF format (example):
-    Register No: 123456789
-    Name: JOHN DOE
-    Subject Code: CS101 | Subject Name: Programming | Grade: A+ | Credits: 4
-    Subject Code: CS102 | Subject Name: Data Structures | Grade: B | Credits: 3
-    
-    Args:
-        pdf_text: Text extracted from PDF
-        
-    Returns:
-        List of dictionaries containing student results
-    """
     results = []
     
     # Pattern to find student blocks (adjust based on your PDF format)
@@ -100,18 +65,7 @@ def parse_ktu_results(pdf_text: str) -> List[Dict]:
 
 
 def get_pass_status(grade: str) -> str:
-    """
-    Determine pass/fail status from grade.
-    
-    KTU Grading: A+, A, B+, B, C are passing grades
-    D, E, F are failing grades
-    
-    Args:
-        grade: Letter grade (e.g., "A+", "B", "F")
-        
-    Returns:
-        "Pass" or "Fail"
-    """
+ 
     passing_grades = ['A+', 'A', 'B+', 'B', 'C']
     
     if grade.upper() in passing_grades:
@@ -121,15 +75,7 @@ def get_pass_status(grade: str) -> str:
 
 
 def validate_parsed_results(results: List[Dict]) -> bool:
-    """
-    Validate that parsed results have required fields.
-    
-    Args:
-        results: List of parsed result dictionaries
-        
-    Returns:
-        True if valid, False otherwise
-    """
+
     if not results:
         return False
     
