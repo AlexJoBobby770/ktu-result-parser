@@ -8,8 +8,6 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         with open(pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
             text = ""
-            
-            # Extract text from all pages
             for page in pdf_reader.pages:
                 text += page.extract_text()
             
@@ -20,28 +18,22 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
 def parse_ktu_results(pdf_text: str) -> List[Dict]:
     results = []
-    
-    # Pattern to find student blocks (adjust based on your PDF format)
-    # This pattern looks for "Register No:" followed by content until next "Register No:" or end
+
     student_blocks = re.split(r'(?=Register No:)', pdf_text)
     
     for block in student_blocks:
         if not block.strip():
             continue
-            
-        # Extract Register Number
+
         reg_match = re.search(r'Register No[:\s]+(\d+)', block, re.IGNORECASE)
         if not reg_match:
             continue
         
         register_no = reg_match.group(1)
-        
-        # Extract Name
+
         name_match = re.search(r'Name[:\s]+([A-Z\s]+)', block, re.IGNORECASE)
         student_name = name_match.group(1).strip() if name_match else "Unknown"
-        
-        # Extract subject results
-        # Pattern: Subject Code: XXX | Subject Name: YYY | Grade: Z | Credits: N
+
         subject_pattern = r'Subject Code[:\s]+([A-Z0-9]+).*?Subject Name[:\s]+([^|]+).*?Grade[:\s]+([A-Z+\-]+).*?Credits[:\s]+(\d+)'
         
         subjects = re.finditer(subject_pattern, block, re.IGNORECASE | re.DOTALL)
@@ -55,8 +47,7 @@ def parse_ktu_results(pdf_text: str) -> List[Dict]:
                 'grade': subject.group(3).strip(),
                 'credits': int(subject.group(4))
             }
-            
-            # Add pass/fail status based on grade
+
             result_entry['status'] = get_pass_status(result_entry['grade'])
             
             results.append(result_entry)
