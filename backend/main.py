@@ -28,12 +28,8 @@ async def health_check():
     """
     return {"status": "ok", "message": "Backend is running"}
 
-# This block runs only when you execute this file directly
-# Not when it's imported as a module
 if __name__ == "__main__":
     import uvicorn
-    # Run the server on localhost:8000
-    # reload=True automatically restarts server when code changes
     print('localhost:8000')
     uvicorn.run("main:app", port=8000, reload=True)
     
