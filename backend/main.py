@@ -1,62 +1,59 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+import os, uuid, shutil
+
 from pdf_parser import extract_text_from_pdf, parse_ktu_results
-import os
-import uuid
-import shutil
 
 app = FastAPI(title="KTU Result Processor API")
 
-
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend")
+UPLOAD_DIR = os.path.join(BASE_DIR, "data")
 
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
-@app.get("/")
-async def serve_homepage():
-    """
-    Serve the main HTML page when user visits the root URL.
-    This is the entry point of our web application.
-    """
-    index_path = os.path.join(FRONTEND_DIR, "index.html")
-    return FileResponse(index_path)
 
-@app.get("/health")
-async def health_check():
-    """
-    Simple health check endpoint to verify backend is running.
-    Returns JSON with status message.
-    """
-    return {"status": "ok", "message": "Backend is running"}
+@app.get("/")
+def home():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_files(
+    pdf_file: UploadFile = File(...),
+    master_file: UploadFile = File(...)
+):
+    """
+    Accept PDF and master file from frontend.
+    Save them to disk for processing.
+    """
     UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "data")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # Preserve original name, but prefix with uuid to avoid collisions
-    safe_name = os.path.basename(file.filename) or "upload"
-    filename = f"{uuid.uuid4().hex}_{safe_name}"
-    file_path = os.path.join(UPLOAD_DIR, filename)
-
-    text = extract_text_from_pdf("results.pdf")
-    results = parse_ktu_results(text)
-
-
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-    finally:
-        await file.close()
-
-    return {"status": "ok", "filename": filename, "saved_to": str(file_path)}
-
-if __name__ == "__main__":
-    import uvicorn
-    print('localhost:8000')
-    uvicorn.run("main:app", port=8000, reload=True)
+    # Save PDF
+    pdf_filename = f"{uuid.uuid4().hex}_result.pdf"
+    pdf_path = os.path.join(UPLOAD_DIR, pdf_filename)
     
+    try:
+        with open(pdf_path, "wb") as f:
+            shutil.copyfileobj(pdf_file.file, f)
+    finally:
+        await pdf_file.close()
+
+    # Save master file
+    master_filename = f"{uuid.uuid4().hex}_master{os.path.splitext(master_file.filename)[1]}"
+    master_path = os.path.join(UPLOAD_DIR, master_filename)
+    
+    try:
+        with open(master_path, "wb") as f:
+            shutil.copyfileobj(master_file.file, f)
+    finally:
+        await master_file.close()
+
+    return {
+        "status": "success",
+        "message": "Files uploaded successfully",
+        "pdf_saved": pdf_filename,
+        "master_saved": master_filename
+    }
