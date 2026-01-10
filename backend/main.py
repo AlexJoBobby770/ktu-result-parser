@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse
-import os, uuid, shutil
+import os
+import uuid
+import shutil
 
 app = FastAPI(title="KTU Result Processor API")
 
@@ -11,6 +13,7 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "data")
 
 @app.get("/health")
 def health_check():
+    """Health check endpoint"""
     return {"status": "ok", "message": "Backend is running"}
 
 
@@ -19,6 +22,7 @@ async def upload_files(
     pdf_file: UploadFile = File(...),
     master_file: UploadFile = File(...)
 ):
+    """Upload PDF and master file"""
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     # Save PDF
@@ -44,18 +48,23 @@ async def upload_files(
     }
 
 
-@app.get("/styles.css")
+@app.get("/static/styles.css")
 def get_styles():
-    return FileResponse(os.path.join(FRONTEND_DIR, "styles.css"), media_type="text/css")
+    """Serve CSS file"""
+    css_path = os.path.join(FRONTEND_DIR, "styles.css")
+    return FileResponse(css_path, media_type="text/css")
 
 
-@app.get("/script.js")
+@app.get("/static/script.js")
 def get_script():
-    return FileResponse(os.path.join(FRONTEND_DIR, "script.js"), media_type="application/javascript")
+    """Serve JavaScript file"""
+    js_path = os.path.join(FRONTEND_DIR, "script.js")
+    return FileResponse(js_path, media_type="application/javascript")
 
 
 @app.get("/")
 def home():
+    """Serve homepage"""
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 
