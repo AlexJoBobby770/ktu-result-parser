@@ -1,21 +1,42 @@
-
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# Virtual Environments
 venv/
 env/
 ENV/
+.venv/
 
+# Data Files (IMPORTANT: Don't commit student data)
 backend/data/*
+!backend/data/.gitkeep
 
+backend/output/*
+!backend/output/.gitkeep
+
+database/*
+!database/.gitkeep
+
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 
+# OS Files
 .DS_Store
 Thumbs.db
 
+# Environment Variables
 .env
+
+# Logs
+*.log
+
+# Excel temp files
+~$*.xlsx
+~$*.xls
