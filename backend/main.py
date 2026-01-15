@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 import os
 import uuid
 import shutil
+from pdf_parser import extract_text_from_pdf, parse_ktu_results
 
 app = FastAPI(title="KTU Result Processor API")
 

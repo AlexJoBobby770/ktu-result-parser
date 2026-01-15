@@ -10,6 +10,8 @@ def extract_text_from_pdf(pdf_path: str) -> str:
             text = ""
             for page in pdf_reader.pages:
                 text += page.extract_text()
+
+            print(f"Extracted text length: {len(text)} characters")
             
             return text
     except Exception as e:
