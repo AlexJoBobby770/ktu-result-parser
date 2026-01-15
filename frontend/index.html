@@ -1,76 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KTU Result Processor</title>
-    <link rel="stylesheet" href="/static/styles.css"> 
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>KTU Result Processor</h1>
-            <p class="subtitle">Upload, Process, and Analyze KTU Results</p>
-        </header>
-
-        <main>
-    <!-- Welcome Section -->
-    <section class="info-card">
-        <h2>Welcome!</h2>
-        <p>This application helps you process KTU result PDFs and generate structured Excel reports.</p>
-        <p id="backend-status">Checking backend connection...</p>
-    </section>
-
-   
-    <section class="upload-section">
-        <h2>Upload Files</h2>
-        <p class="section-description">Select the KTU result PDF and student master file to begin processing.</p>
-        
-        <div class="upload-form">
-            
-            <div class="file-input-group">
-                <label for="pdfFile" class="file-label">
-                    <span class="label-text">📄 KTU Result PDF</span>
-                    <span class="file-requirement">Required • PDF only</span>
-                </label>
-                <input 
-                    type="file" 
-                    id="pdfFile" 
-                    accept=".pdf"
-                    class="file-input"
-                >
-                <div id="pdfFileName" class="file-name-display">No file selected</div>
-            </div>
-
-            <div class="file-input-group">
-                <label for="masterFile" class="file-label">
-                    <span class="label-text">📊 Student Master File</span>
-                    <span class="file-requirement">Required • Excel or CSV</span>
-                </label>
-                <input 
-                    type="file" 
-                    id="masterFile" 
-                    accept=".xlsx,.xls,.csv"
-                    class="file-input"
-                >
-                <div id="masterFileName" class="file-name-display">No file selected</div>
-            </div>
-
-         
-            <button id="uploadBtn" class="upload-btn" disabled>
-                Upload & Process
-            </button>
-
-            <div id="uploadStatus" class="upload-status"></div>
-        </div>
-    </section>
-</main>
-
-        <footer>
-            <p>KTU Result Processor v1.0 | Built with FastAPI + Vanilla JS</p>
-        </footer>
-    </div>
-
-    <script src="/static/script.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>react</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
