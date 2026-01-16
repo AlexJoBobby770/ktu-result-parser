@@ -18,7 +18,7 @@ function App() {
 
   const checkBackendConnection = async () => {
     try {
-      const response = await fetch("/health");
+      const response = await fetch("http://127.0.0.1:8000/health");
       if (response.ok) {
         const data = await response.json();
         setBackendStatus("connected");
@@ -81,7 +81,7 @@ function App() {
       formData.append("pdf_file", pdfFile);
       formData.append("master_file", masterFile);
 
-      const response = await fetch("/upload", {
+      const response = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
         body: formData,
       });
