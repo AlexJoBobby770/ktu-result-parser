@@ -1,87 +1,95 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import uuid
 import shutil
+
 from pdf_parser import parse_ktu_results
+from excel_generator import generate_excel_report
 
-app = FastAPI(title="KTU Result Processor API")
+app = FastAPI()
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend")
-UPLOAD_DIR = os.path.join(BASE_DIR, "data")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+UPLOAD_DIR = "data"
+OUTPUT_DIR = "output"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 @app.get("/health")
-def health_check():
+def health():
     return {"status": "ok", "message": "Backend is running"}
 
 
 @app.post("/upload")
-async def upload_files(
+async def upload_result(
     pdf_file: UploadFile = File(...),
     master_file: UploadFile = File(...)
 ):
-    """Upload PDF and master file, then parse the PDF"""
-    
     # Save PDF
-    pdf_filename = f"{uuid.uuid4().hex}_result.pdf"
-    pdf_path = os.path.join(UPLOAD_DIR, pdf_filename)
+    session_id = uuid.uuid4().hex[:8]
+    pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}.pdf")
+    
     with open(pdf_path, "wb") as f:
         shutil.copyfileobj(pdf_file.file, f)
     
-    # Save master file
-    master_ext = os.path.splitext(master_file.filename)[1]
-    master_filename = f"{uuid.uuid4().hex}_master{master_ext}"
-    master_path = os.path.join(UPLOAD_DIR, master_filename)
+    # Save master file (not used yet, but saved for future)
+    master_path = os.path.join(UPLOAD_DIR, f"{session_id}_master.xlsx")
     with open(master_path, "wb") as f:
         shutil.copyfileobj(master_file.file, f)
     
-    # Parse the PDF
+    # Parse PDF
     results = parse_ktu_results(pdf_path)
-    print(f"Parsed {len(results)} records from {pdf_file.filename}")
-
-    # Get department summary
-    dept_summary = {}
+    
+    # Generate Excel
+    excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
+    generate_excel_report(results, excel_path)
+    
+    # Summary stats
+    summary = {}
     for r in results:
-        dept = r['department']
-        if dept not in dept_summary:
-            dept_summary[dept] = {'total': 0, 'pass': 0, 'fail': 0}
-        dept_summary[dept]['total'] += 1
-        if r['status'] == 'Pass':
-            dept_summary[dept]['pass'] += 1
+        dept = r["department"]
+        if dept not in summary:
+            summary[dept] = {"total": 0, "pass": 0, "fail": 0}
+        summary[dept]["total"] += 1
+        if r["status"] == "Pass":
+            summary[dept]["pass"] += 1
         else:
-            dept_summary[dept]['fail'] += 1
+            summary[dept]["fail"] += 1
     
     return {
-        "status": "success",
-        "message": f"Parsed {len(results)} records",
+        "message": f"Successfully parsed {len(results)} records",
+        "session_id": session_id,
         "total_records": len(results),
-        "departments": dept_summary,
-        "sample_data": results[:5]
+        "departments": summary,
+        "sample_data": results[:5],
+        "excel_ready": True
     }
 
 
-@app.get("/static/styles.css")
-def get_styles():
-    css_path = os.path.join(FRONTEND_DIR, "styles.css")
-    return FileResponse(css_path, media_type="text/css")
-
-
-@app.get("/static/script.js")
-def get_script():
-    js_path = os.path.join(FRONTEND_DIR, "script.js")
-    return FileResponse(js_path, media_type="application/javascript")
-
-
-@app.get("/")
-def home():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+@app.get("/download/{session_id}")
+def download_excel(session_id: str):
+    """Download generated Excel file"""
+    excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
+    
+    if not os.path.exists(excel_path):
+        return {"error": "File not found"}
+    
+    return FileResponse(
+        excel_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=f"KTU_Results_{session_id}.xlsx"
+    )
 
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting server at http://localhost:8000")
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", reload=True, port=8000)
