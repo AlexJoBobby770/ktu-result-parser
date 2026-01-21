@@ -5,19 +5,7 @@ from typing import List, Dict
 
 
 def generate_excel_report(students: List[Dict], output_path: str):
-    """
-    Generate Excel report from parsed student data
-    
-    Input format:
-    [
-        {
-            "register_no": "AIK23CE035",
-            "department": "CIVIL ENGINEERING[Full Time]",
-            "subjects": {"MAT202": "AB", "EST200": "F"},
-            "status": "Fail"
-        }
-    ]
-    """
+
     
     # Convert nested structure to flat rows
     flat_data = []
