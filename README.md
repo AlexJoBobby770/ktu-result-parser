@@ -1,110 +1,72 @@
 KTU Result PDF → Excel Processor
 
-A backend-focused web application that converts KTU result PDFs (text-layer) into structured Excel workbooks for academic analysis and reporting.
+Backend system to convert KTU result PDFs (text-layer) into structured Excel reports.
 
-This project uses deterministic parsing with regex — no OCR, no machine learning.
+No OCR. No ML. Deterministic parsing using regex.
 
-✨ Features
+Tech Stack
 
-Upload KTU result PDF
+Backend: Python, FastAPI
 
-Parse student-wise results (USN → subjects → grades)
+PDF Parsing: PyPDF2 + regex
 
-Department-aware extraction
+Excel: pandas, openpyxl
 
-Generate Excel workbook (master & department-wise)
+Frontend: React (Vite)
 
-FastAPI backend
+DB (planned): SQLite
 
-Minimal, framework-agnostic frontend
+Current Status
+✅ Working
 
-🏗️ Architecture Overview
+FastAPI backend running
 
-KTU Result PDF
-↓
-Text Extraction
-↓
-Regex Parsing (Student-Level)
-↓
-Structured Python Objects
-↓
-Excel Workbook Generation
+/upload endpoint implemented
 
-📁 Project Structure
+PDF parsing works (student-level)
 
-ktu-result-processor/
-├── backend/
-│ ├── main.py # FastAPI entry point
-│ ├── pdf_parser.py # PDF parsing logic
-│ ├── excel_generator.py # Excel generation logic
-│ ├── data/ # Uploaded files (git-ignored)
-│ └── output/ # Generated reports (git-ignored)
-│
-├── frontend/
-│ ├── index.html # Upload UI
-│ └── script.js # API interaction
-│
-├── README.md
-└── .gitignore
+Excel generation works
 
-🔧 Tech Stack
-Backend
-
-Python
-
-FastAPI
-
-PyPDF2
-
-regex
-
-pandas
-
-openpyxl
-
-Frontend
-
-HTML
-
-CSS
-
-Vanilla JavaScript
-
-🎯 Project Goal
-
-Build a backend system that converts KTU result PDFs (text-layer) into a clean, analyzable Excel workbook.
-
-No OCR
-
-No ML / NLP
-
-Deterministic and explainable parsing
-
-Designed for college-level academic use
-
-🚧 Project Status
-✅ Completed
-
-Backend setup and API scaffolding
-
-PDF parsing logic (student-level extraction)
-
-Department detection and normalization
-
-Health check endpoint
+React frontend connected and usable
 
 🔄 In Progress
 
-File upload UI (PDF + master file)
+Frontend UI improvements
 
-Frontend → backend integration (/upload)
+Better upload feedback & UX
 
 ⏳ Planned
 
-Excel download endpoint
+Excel download endpoint polish
 
-Statistics API (pass/fail, department-wise)
+Stats API (pass/fail, dept-wise)
 
-Graphical result visualization
+Charts & visualization
 
-UI polish and basic validations
+Basic error handling
+
+Project Structure
+backend/    → FastAPI, parsing, Excel generation
+frontend/   → React (Vite)
+
+Running (Dev)
+
+Backend
+
+cd backend
+uvicorn main:app --reload
+
+
+Frontend
+
+cd frontend
+npm install
+npm run dev
+
+Notes
+
+PDFs, outputs, and node_modules are git-ignored
+
+Backend is frontend-agnostic
+
+Focus is correctness first, UI later
