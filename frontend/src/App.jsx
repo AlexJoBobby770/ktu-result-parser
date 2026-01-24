@@ -42,73 +42,70 @@ function App() {
   };
 
   const handleUpload = async () => {
-    // Validation
-    if (!pdfFile || !masterFile) {
+  if (!pdfFile || !masterFile) {
+    setUploadStatus({
+      message: "Please select both files",
+      type: "error",
+    });
+    return;
+  }
+
+  setIsUploading(true);
+  setUploadStatus({ message: "Uploading...", type: "loading" });
+
+  const formData = new FormData();
+  formData.append("pdf_file", pdfFile);
+  formData.append("master_file", masterFile);
+
+  try {
+    const response = await fetch("http://localhost:8000/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      // Show success message with download button
+      const downloadUrl = `http://localhost:8000/download/${result.session_id}`;
+      
       setUploadStatus({
-        message: "Please select both files",
-        type: "error",
+        message: (
+          <div>
+            <p>✅ {result.message}</p>
+            <a 
+              href={downloadUrl} 
+              download
+              style={{
+                display: 'inline-block',
+                marginTop: '1rem',
+                padding: '0.75rem 1.5rem',
+                background: '#667eea',
+                color: 'white',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                fontWeight: 'bold'
+              }}
+            >
+              📥 Download Excel Report
+            </a>
+            <div style={{ marginTop: '1rem', fontSize: '0.9em' }}>
+              <strong>Summary:</strong>
+              <pre>{JSON.stringify(result.departments, null, 2)}</pre>
+            </div>
+          </div>
+        ),
+        type: "success",
       });
-      return;
+    } else {
+      setUploadStatus({ message: `❌ ${result.detail}`, type: "error" });
     }
-
-    if (!pdfFile.name.toLowerCase().endsWith(".pdf")) {
-      setUploadStatus({
-        message: "Please select a valid PDF file",
-        type: "error",
-      });
-      return;
-    }
-
-    const masterExt = masterFile.name.toLowerCase();
-    if (
-      !masterExt.endsWith(".xlsx") &&
-      !masterExt.endsWith(".xls") &&
-      !masterExt.endsWith(".csv")
-    ) {
-      setUploadStatus({
-        message: "Please select a valid Excel or CSV file",
-        type: "error",
-      });
-      return;
-    }
-
-    // Upload
-    setIsUploading(true);
-    setUploadStatus({ message: "Uploading files...", type: "loading" });
-
-    try {
-      const formData = new FormData();
-      formData.append("pdf_file", pdfFile);
-      formData.append("master_file", masterFile);
-
-      const response = await fetch("http://127.0.0.1:8000/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setUploadStatus({
-          message: result.message || "Files uploaded successfully!",
-          type: "success",
-        });
-      } else {
-        setUploadStatus({
-          message: result.detail || "Upload failed. Please try again.",
-          type: "error",
-        });
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      setUploadStatus({
-        message: "Network error. Please check your connection.",
-        type: "error",
-      });
-    } finally {
-      setIsUploading(false);
-    }
-  };
+  } catch (error) {
+    setUploadStatus({ message: "❌ Network error", type: "error" });
+  } finally {
+    setIsUploading(false);
+  }
+};
 
   const formatFileSize = (bytes) => {
     return (bytes / (1024 * 1024)).toFixed(2);
