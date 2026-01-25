@@ -375,7 +375,7 @@ function App() {
             <p>© 2024 KTU Processor. Built with FastAPI + React.</p>
           </div>
           <div className="footer-right">
-            <span>Made with ❤️ by Claude , Hari and Shalom</span>
+            <span>Made by alex and ai alone</span>
           </div>
         </div>
       </footer>
