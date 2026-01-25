@@ -1,8 +1,9 @@
 import "./App.css";
-import { useEffect, useState } from "react";
-import Footer from "./Footer";
+import { useEffect, useState, useRef } from "react";
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-
+gsap.registerPlugin(ScrollTrigger);
 
 function App() {
   const [backendStatus, setBackendStatus] = useState("checking");
@@ -10,17 +11,75 @@ function App() {
   const [masterFile, setMasterFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({ message: "", type: "" });
   const [isUploading, setIsUploading] = useState(false);
+  
+  const heroRef = useRef(null);
+  const uploadSectionRef = useRef(null);
+  const featureCardsRef = useRef([]);
 
-  // Check backend connection on mount
   useEffect(() => {
     checkBackendConnection();
+  }, []);
+
+  useEffect(() => {
+    // Hero animation
+    if (heroRef.current) {
+      gsap.fromTo(
+        heroRef.current.children,
+        { opacity: 0, y: 30 },
+        { 
+          opacity: 1, 
+          y: 0, 
+          duration: 1,
+          stagger: 0.2,
+          ease: 'power3.out'
+        }
+      );
+    }
+
+    // Upload section animation
+    if (uploadSectionRef.current) {
+      gsap.fromTo(
+        uploadSectionRef.current,
+        { opacity: 0, y: 50 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 1,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: uploadSectionRef.current,
+            start: 'top 80%',
+          }
+        }
+      );
+    }
+
+    // Feature cards animation
+    featureCardsRef.current.forEach((card, index) => {
+      if (card) {
+        gsap.fromTo(
+          card,
+          { opacity: 0, y: 30 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            delay: index * 0.15,
+            ease: 'power3.out',
+            scrollTrigger: {
+              trigger: card,
+              start: 'top 85%',
+            }
+          }
+        );
+      }
+    });
   }, []);
 
   const checkBackendConnection = async () => {
     try {
       const response = await fetch("http://127.0.0.1:8000/health");
       if (response.ok) {
-        const data = await response.json();
         setBackendStatus("connected");
       } else {
         throw new Error("Backend unavailable");
@@ -31,50 +90,14 @@ function App() {
     }
   };
 
-  const handlePdfFileChange = (e) => {
-    setPdfFile(e.target.files[0]);
-    setUploadStatus({ message: "", type: "" });
-  };
-
-  const handleMasterFileChange = (e) => {
-    setMasterFile(e.target.files[0]);
-    setUploadStatus({ message: "", type: "" });
-  };
-
   const handleUpload = async () => {
-    // Validation
     if (!pdfFile || !masterFile) {
-      setUploadStatus({
-        message: "Please select both files",
-        type: "error",
-      });
+      setUploadStatus({ message: "Please select both files", type: "error" });
       return;
     }
 
-    if (!pdfFile.name.toLowerCase().endsWith(".pdf")) {
-      setUploadStatus({
-        message: "Please select a valid PDF file",
-        type: "error",
-      });
-      return;
-    }
-
-    const masterExt = masterFile.name.toLowerCase();
-    if (
-      !masterExt.endsWith(".xlsx") &&
-      !masterExt.endsWith(".xls") &&
-      !masterExt.endsWith(".csv")
-    ) {
-      setUploadStatus({
-        message: "Please select a valid Excel or CSV file",
-        type: "error",
-      });
-      return;
-    }
-
-    // Upload
     setIsUploading(true);
-    setUploadStatus({ message: "Uploading files...", type: "loading" });
+    setUploadStatus({ message: "Processing your files...", type: "loading" });
 
     try {
       const formData = new FormData();
@@ -90,17 +113,16 @@ function App() {
 
       if (response.ok) {
         setUploadStatus({
-          message: result.message || "Files uploaded successfully!",
+          message: "Success! Your files have been processed.",
           type: "success",
         });
       } else {
         setUploadStatus({
-          message: result.detail || "Upload failed. Please try again.",
+          message: result.detail || "Something went wrong. Please try again.",
           type: "error",
         });
       }
     } catch (error) {
-      console.error("Upload error:", error);
       setUploadStatus({
         message: "Network error. Please check your connection.",
         type: "error",
@@ -110,207 +132,252 @@ function App() {
     }
   };
 
-  const formatFileSize = (bytes) => {
-    return (bytes / (1024 * 1024)).toFixed(2);
-  };
-
   return (
-    <> 
     <div className="app">
-      {/* Header */}
-      <header className="header">
-        <div className="header-content">
-          <div className="header-left">
-            <svg className="logo-icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" />
+      {/* Navigation */}
+      <nav className="nav">
+        <div className="nav-container">
+          <div className="nav-logo">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2"/>
+              <path d="M12 16L15 19L20 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <h1 className="header-title">KTU Result Processor</h1>
+            <span>KTU Processor</span>
           </div>
-          <div className="status-badge">
-            {backendStatus === "connected" && (
-              <>
-                <span className="status-dot status-success"></span>
-                <span className="status-text">Backend Online</span>
-              </>
-            )}
-            {backendStatus === "disconnected" && (
-              <>
-                <span className="status-dot status-error"></span>
-                <span className="status-text">Backend Offline</span>
-              </>
-            )}
-            {backendStatus === "checking" && (
-              <>
-                <span className="status-dot status-checking"></span>
-                <span className="status-text">Connecting...</span>
-              </>
-            )}
+          <div className="nav-status">
+            <span className={`status-indicator ${backendStatus}`}></span>
+            <span className="status-text">
+              {backendStatus === "connected" && "Online"}
+              {backendStatus === "disconnected" && "Offline"}
+              {backendStatus === "checking" && "Connecting"}
+            </span>
           </div>
         </div>
-      </header>
+      </nav>
 
-      {/* Main Content */}
-      <main className="main">
-        <div className="container">
-          {/* Hero Section */}
-          <section className="hero">
-            <h2 className="hero-title">
-              Process KTU Results with Ease
-            </h2>
-            <p className="hero-description">
-              Upload your KTU result PDFs and student master files to generate
-              structured Excel reports automatically.
-            </p>
-          </section>
+      {/* Hero Section */}
+      <section className="hero" ref={heroRef}>
+        <div className="hero-content">
+          <h1 className="hero-title">
+            Transform KTU Results<br/>Into Structured Data
+          </h1>
+          <p className="hero-subtitle">
+            Automated processing for KTU result PDFs. Upload, process, and download 
+            structured Excel reports in seconds.
+          </p>
+          <div className="hero-cta">
+            <button className="btn-primary" onClick={() => uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+              Get Started
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M7 13L13 7M13 7H7M13 7V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        
+        <div className="hero-visual">
+          <div className="floating-card card-1">
+            <div className="card-icon">📄</div>
+            <div className="card-label">PDF Input</div>
+          </div>
+          <div className="floating-card card-2">
+            <div className="card-icon">⚡</div>
+            <div className="card-label">Processing</div>
+          </div>
+          <div className="floating-card card-3">
+            <div className="card-icon">📊</div>
+            <div className="card-label">Excel Output</div>
+          </div>
+        </div>
+      </section>
 
-          {/* Upload Card */}
-          <section className="card">
-            <div className="card-header">
-              <h3 className="card-title">Upload Files</h3>
-              <p className="card-description">
-                Select both required files to begin processing
-              </p>
-            </div>
+      {/* Upload Section */}
+      <section className="upload-section" ref={uploadSectionRef}>
+        <div className="section-header">
+          <h2 className="section-title">Upload Your Files</h2>
+          <p className="section-description">
+            Select your KTU result PDF and student master file to begin processing
+          </p>
+        </div>
 
-            <div className="card-body">
-              {/* PDF File Upload */}
-              <div className="file-upload-group">
-                <label className="file-label">
-                  <div className="label-header">
-                    <span className="label-icon">📄</span>
-                    <span className="label-text">KTU Result PDF</span>
-                  </div>
-                  <span className="label-requirement">Required • PDF only</span>
-                </label>
-                <div className="file-input-wrapper">
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={handlePdfFileChange}
-                    className="file-input"
-                    id="pdf-file"
-                  />
-                  <label htmlFor="pdf-file" className="file-input-button">
-                    {pdfFile ? "Change file" : "Choose file"}
-                  </label>
-                  <div className={`file-display ${pdfFile ? "has-file" : ""}`}>
-                    {pdfFile
-                      ? `${pdfFile.name} (${formatFileSize(pdfFile.size)} MB)`
-                      : "No file selected"}
-                  </div>
-                </div>
+        <div className="upload-container">
+          <div className="upload-grid">
+            {/* PDF Upload */}
+            <div className="upload-card">
+              <div className="upload-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
-
-              {/* Master File Upload */}
-              <div className="file-upload-group">
-                <label className="file-label">
-                  <div className="label-header">
-                    <span className="label-icon">📊</span>
-                    <span className="label-text">Student Master File</span>
-                  </div>
-                  <span className="label-requirement">
-                    Required • Excel or CSV
-                  </span>
-                </label>
-                <div className="file-input-wrapper">
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    onChange={handleMasterFileChange}
-                    className="file-input"
-                    id="master-file"
-                  />
-                  <label htmlFor="master-file" className="file-input-button">
-                    {masterFile ? "Change file" : "Choose file"}
-                  </label>
-                  <div
-                    className={`file-display ${masterFile ? "has-file" : ""}`}
-                  >
-                    {masterFile
-                      ? `${masterFile.name} (${formatFileSize(
-                          masterFile.size
-                        )} MB)`
-                      : "No file selected"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Upload Button */}
-              <button
-                onClick={handleUpload}
-                disabled={!pdfFile || !masterFile || isUploading}
-                className={`btn-primary ${
-                  !pdfFile || !masterFile || isUploading ? "disabled" : ""
-                }`}
-              >
-                {isUploading ? (
-                  <>
-                    <span className="spinner"></span>
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    Upload & Process
-                  </>
-                )}
-              </button>
-
-              {/* Status Message */}
-              {uploadStatus.message && (
-                <div className={`alert alert-${uploadStatus.type}`}>
-                  {uploadStatus.type === "success" && (
-                    <svg className="alert-icon" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                    </svg>
-                  )}
-                  {uploadStatus.type === "error" && (
-                    <svg className="alert-icon" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-                    </svg>
-                  )}
-                  {uploadStatus.type === "loading" && (
-                    <span className="spinner-small"></span>
-                  )}
-                  <span>{uploadStatus.message}</span>
+              <h3 className="upload-title">Result PDF</h3>
+              <p className="upload-description">KTU result document</p>
+              
+              <label className="file-input-label">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setPdfFile(e.target.files[0])}
+                  className="file-input-hidden"
+                />
+                <span className="file-input-button">
+                  {pdfFile ? "Change File" : "Select PDF"}
+                </span>
+              </label>
+              
+              {pdfFile && (
+                <div className="file-selected">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M13.3333 4L6 11.3333L2.66666 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>{pdfFile.name}</span>
                 </div>
               )}
             </div>
-          </section>
 
-          {/* Features Section */}
-          <section className="features">
-            <div className="feature-card">
-              <div className="feature-icon">⚡</div>
-              <h4 className="feature-title">Fast Processing</h4>
-              <p className="feature-description">
-                Automatically parse and structure result data in seconds
-              </p>
+            {/* Master File Upload */}
+            <div className="upload-card">
+              <div className="upload-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                  <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <polyline points="13 2 13 9 20 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="8" y1="13" x2="16" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="8" y1="17" x2="16" y2="17" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <h3 className="upload-title">Master File</h3>
+              <p className="upload-description">Student data (Excel/CSV)</p>
+              
+              <label className="file-input-label">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={(e) => setMasterFile(e.target.files[0])}
+                  className="file-input-hidden"
+                />
+                <span className="file-input-button">
+                  {masterFile ? "Change File" : "Select File"}
+                </span>
+              </label>
+              
+              {masterFile && (
+                <div className="file-selected">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M13.3333 4L6 11.3333L2.66666 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>{masterFile.name}</span>
+                </div>
+              )}
             </div>
-            <div className="feature-card">
-              <div className="feature-icon">📈</div>
-              <h4 className="feature-title">Analytics Ready</h4>
-              <p className="feature-description">
-                Generate performance reports and statistical insights
-              </p>
+          </div>
+
+          {/* Process Button */}
+          <button
+            className={`btn-process ${(!pdfFile || !masterFile || isUploading) ? 'disabled' : ''}`}
+            onClick={handleUpload}
+            disabled={!pdfFile || !masterFile || isUploading}
+          >
+            {isUploading ? (
+              <>
+                <span className="spinner"></span>
+                Processing...
+              </>
+            ) : (
+              <>
+                Process Files
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M10 3.33334V16.6667M10 16.6667L15 11.6667M10 16.6667L5 11.6667" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </>
+            )}
+          </button>
+
+          {/* Status Message */}
+          {uploadStatus.message && (
+            <div className={`upload-status ${uploadStatus.type}`}>
+              <div className="status-icon">
+                {uploadStatus.type === 'success' && (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+                {uploadStatus.type === 'error' && (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                    <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                )}
+                {uploadStatus.type === 'loading' && <span className="spinner"></span>}
+              </div>
+              <span>{uploadStatus.message}</span>
             </div>
-            <div className="feature-card">
-              <div className="feature-icon">🔒</div>
-              <h4 className="feature-title">Secure</h4>
-              <p className="feature-description">
-                Your data is processed securely and never stored
-              </p>
-            </div>
-          </section>
+          )}
         </div>
-      </main>
+      </section>
+
+      {/* Features Section */}
+      <section className="features-section">
+        <div className="section-header">
+          <h2 className="section-title">Why Choose Us</h2>
+          <p className="section-description">
+            Built for speed, accuracy, and simplicity
+          </p>
+        </div>
+
+        <div className="features-grid">
+          <div className="feature-card" ref={el => featureCardsRef.current[0] = el}>
+            <div className="feature-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="feature-title">Lightning Fast</h3>
+            <p className="feature-description">
+              Process hundreds of records in seconds with our optimized parsing engine
+            </p>
+          </div>
+
+          <div className="feature-card" ref={el => featureCardsRef.current[1] = el}>
+            <div className="feature-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <line x1="12" y1="1" x2="12" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="feature-title">100% Accurate</h3>
+            <p className="feature-description">
+              Advanced algorithms ensure zero data loss and perfect format conversion
+            </p>
+          </div>
+
+          <div className="feature-card" ref={el => featureCardsRef.current[2] = el}>
+            <div className="feature-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="feature-title">Secure</h3>
+            <p className="feature-description">
+              Your data is processed locally and never stored on our servers
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
-< Footer  />
+      <footer className="footer">
+        <div className="footer-content">
+          <div className="footer-left">
+            <p>© 2024 KTU Processor. Built with FastAPI + React.</p>
+          </div>
+          <div className="footer-right">
+            <span>Made with ❤️ by Claude , Hari and Shalom</span>
+          </div>
+        </div>
+      </footer>
     </div>
-    </>
   );
 }
 

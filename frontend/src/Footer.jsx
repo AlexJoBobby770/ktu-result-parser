@@ -6,7 +6,7 @@ export default function Footer() {
             KTU Result Processor v1.0 • Built with FastAPI + React+gpt
           </p>
           <div className="footer-links">
-            <span>Made by Alex alone</span>
+            <span>Made by Hari alone</span>
           </div>
         </div>
       </footer>
