@@ -1,6 +1,8 @@
-from fastapi import FastAPI, UploadFile, File
+
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 import os
 import uuid
 import shutil
@@ -12,7 +14,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,19 +34,20 @@ def health():
 @app.post("/upload")
 async def upload_result(
     pdf_file: UploadFile = File(...),
-    master_file: UploadFile = File(...)
+    master_file: Optional[UploadFile] = File(None)  # ✅ Now optional!
 ):
-    # Save PDF
     session_id = uuid.uuid4().hex[:8]
-    pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}.pdf")
     
+    # Save PDF
+    pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}.pdf")
     with open(pdf_path, "wb") as f:
         shutil.copyfileobj(pdf_file.file, f)
     
-    # Save master file (not used yet, but saved for future)
-    master_path = os.path.join(UPLOAD_DIR, f"{session_id}_master.xlsx")
-    with open(master_path, "wb") as f:
-        shutil.copyfileobj(master_file.file, f)
+    # Save master file if provided (for future use)
+    if master_file:
+        master_path = os.path.join(UPLOAD_DIR, f"{session_id}_master.xlsx")
+        with open(master_path, "wb") as f:
+            shutil.copyfileobj(master_file.file, f)
     
     # Parse PDF
     results = parse_ktu_results(pdf_path)
@@ -53,31 +56,27 @@ async def upload_result(
     excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
     generate_excel_report(results, excel_path)
     
-    # Summary stats
+    # Summary
     summary = {}
-    for r in results:
-        dept = r["department"]
+    for student in results:
+        dept = student["department"]
         if dept not in summary:
-            summary[dept] = {"total": 0, "pass": 0, "fail": 0}
-        summary[dept]["total"] += 1
-        if r["status"] == "Pass":
-            summary[dept]["pass"] += 1
-        else:
-            summary[dept]["fail"] += 1
+            summary[dept] = {"total_students": 0, "with_arrears": 0}
+        summary[dept]["total_students"] += 1
+        if student["status"] == "Fail":
+            summary[dept]["with_arrears"] += 1
     
     return {
-        "message": f"Successfully parsed {len(results)} records",
+        "message": f"Successfully parsed {len(results)} students",
         "session_id": session_id,
-        "total_records": len(results),
+        "total_students": len(results),
         "departments": summary,
-        "sample_data": results[:5],
         "excel_ready": True
     }
 
 
 @app.get("/download/{session_id}")
 def download_excel(session_id: str):
-    """Download generated Excel file"""
     excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
     
     if not os.path.exists(excel_path):
