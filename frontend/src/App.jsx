@@ -8,7 +8,6 @@ gsap.registerPlugin(ScrollTrigger);
 function App() {
   const [backendStatus, setBackendStatus] = useState("checking");
   const [pdfFile, setPdfFile] = useState(null);
-  const [masterFile, setMasterFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({ message: "", type: "" });
   const [isUploading, setIsUploading] = useState(false);
   
@@ -91,19 +90,17 @@ function App() {
   };
 
   const handleUpload = async () => {
-
-    if (!pdfFile || !masterFile) {
-      setUploadStatus({ message: "Please select both files", type: "error" });
+    if (!pdfFile) {
+      setUploadStatus({ message: "Please select a PDF file", type: "error" });
       return;
     }
 
     setIsUploading(true);
-    setUploadStatus({ message: "Processing your files...", type: "loading" });
+    setUploadStatus({ message: "Processing your file...", type: "loading" });
 
     try {
       const formData = new FormData();
       formData.append("pdf_file", pdfFile);
-      formData.append("master_file", masterFile);
 
       const response = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
@@ -114,7 +111,7 @@ function App() {
 
       if (response.ok) {
         setUploadStatus({
-          message: "Success! Your files have been processed.",
+          message: "Success! Your file has been processed.",
           type: "success",
         });
       } else {
@@ -196,24 +193,24 @@ function App() {
       {/* Upload Section */}
       <section className="upload-section" ref={uploadSectionRef}>
         <div className="section-header">
-          <h2 className="section-title">Upload Your Files</h2>
+          <h2 className="section-title">Upload Your File</h2>
           <p className="section-description">
-            Select your KTU result PDF and student master file to begin processing
+            Select your KTU student result PDF to begin processing
           </p>
         </div>
 
         <div className="upload-container">
-          <div className="upload-grid">
+          <div className="upload-grid-single">
             {/* PDF Upload */}
-            <div className="upload-card">
+            <div className="upload-card upload-card-single">
               <div className="upload-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   <polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
-              <h3 className="upload-title">Result PDF</h3>
-              <p className="upload-description">KTU result document</p>
+              <h3 className="upload-title">Student Result PDF</h3>
+              <p className="upload-description">KTU student result document</p>
               
               <label className="file-input-label">
                 <input
@@ -236,48 +233,13 @@ function App() {
                 </div>
               )}
             </div>
-
-            {/* Master File Upload */}
-            <div className="upload-card">
-              <div className="upload-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                  <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <polyline points="13 2 13 9 20 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <line x1="8" y1="13" x2="16" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="8" y1="17" x2="16" y2="17" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <h3 className="upload-title">Master File</h3>
-              <p className="upload-description">Student data (Excel/CSV)</p>
-              
-              <label className="file-input-label">
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={(e) => setMasterFile(e.target.files[0])}
-                  className="file-input-hidden"
-                />
-                <span className="file-input-button">
-                  {masterFile ? "Change File" : "Select File"}
-                </span>
-              </label>
-              
-              {masterFile && (
-                <div className="file-selected">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M13.3333 4L6 11.3333L2.66666 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <span>{masterFile.name}</span>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Process Button */}
           <button
-            className={`btn-process ${(!pdfFile || !masterFile || isUploading) ? 'disabled' : ''}`}
+            className={`btn-process ${(!pdfFile || isUploading) ? 'disabled' : ''}`}
             onClick={handleUpload}
-            disabled={!pdfFile || !masterFile || isUploading}
+            disabled={!pdfFile || isUploading}
           >
             {isUploading ? (
               <>
@@ -286,7 +248,7 @@ function App() {
               </>
             ) : (
               <>
-                Process Files
+                Process File
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <path d="M10 3.33334V16.6667M10 16.6667L15 11.6667M10 16.6667L5 11.6667" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
