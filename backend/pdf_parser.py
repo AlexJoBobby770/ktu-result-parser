@@ -13,10 +13,7 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
 
 def parse_ktu_results(pdf_path: str):
-    """
-    Parse KTU PDF and return student results
-    Name field is left empty for manual entry
-    """
+
     text = extract_text_from_pdf(pdf_path)
     students = []
 
@@ -44,7 +41,7 @@ def parse_ktu_results(pdf_path: str):
                 )
                 students.append({
                     "register_no": current_usn,
-                    "name": "",  # ✅ Empty for manual entry
+                    "name": "",  
                     "department": current_department,
                     "subjects": current_subjects,
                     "status": "Fail" if has_fail else "Pass"
@@ -67,7 +64,7 @@ def parse_ktu_results(pdf_path: str):
         )
         students.append({
             "register_no": current_usn,
-            "name": "",  # ✅ Empty for manual entry
+            "name": "",
             "department": current_department,
             "subjects": current_subjects,
             "status": "Fail" if has_fail else "Pass"
