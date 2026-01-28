@@ -34,7 +34,6 @@ def health():
 @app.post("/upload")
 async def upload_result(
     pdf_file: UploadFile = File(...),
-    master_file: Optional[UploadFile] = File(None)  # ✅ Now optional!
 ):
     session_id = uuid.uuid4().hex[:8]
     
@@ -43,11 +42,6 @@ async def upload_result(
     with open(pdf_path, "wb") as f:
         shutil.copyfileobj(pdf_file.file, f)
     
-    # Save master file if provided (for future use)
-    if master_file:
-        master_path = os.path.join(UPLOAD_DIR, f"{session_id}_master.xlsx")
-        with open(master_path, "wb") as f:
-            shutil.copyfileobj(master_file.file, f)
     
     # Parse PDF
     results = parse_ktu_results(pdf_path)
