@@ -4,6 +4,7 @@ dist/
 .vite/
 npm-debug.log*
 yarn-error.log*
+
 # Python
 venv/
 __pycache__/
