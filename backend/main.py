@@ -79,6 +79,19 @@ def download_excel(session_id: str):
         filename=f"KTU_Results_{session_id}.xlsx"
     )
 
+@app.get("/download/{session_id}")
+def download_excel(session_id: str):
+    excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
+    
+    if not os.path.exists(excel_path):
+        return {"error": "File not found"}
+    
+    return FileResponse(
+        excel_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=f"KTU_Results_{session_id}.xlsx"
+    )
+
 
 if __name__ == "__main__":
     import uvicorn

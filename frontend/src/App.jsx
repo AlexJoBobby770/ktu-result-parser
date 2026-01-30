@@ -10,6 +10,9 @@ function App() {
   const [pdfFile, setPdfFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({ message: "", type: "" });
   const [isUploading, setIsUploading] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const [showDownload, setShowDownload] = useState(false);
+
   
   const heroRef = useRef(null);
   const uploadSectionRef = useRef(null);
@@ -74,6 +77,9 @@ function App() {
       }
     });
   }, []);
+  
+                      
+            
 
   const checkBackendConnection = async () => {
     try {
@@ -98,6 +104,8 @@ function App() {
     setIsUploading(true);
     setUploadStatus({ message: "Processing your file...", type: "loading" });
 
+    
+
     try {
       const formData = new FormData();
       formData.append("pdf_file", pdfFile);
@@ -108,18 +116,22 @@ function App() {
       });
 
       const result = await response.json();
-
-      if (response.ok) {
-        setUploadStatus({
-          message: "Success! Your file has been processed.",
-          type: "success",
-        });
-      } else {
+      if (!response.ok) {
         setUploadStatus({
           message: result.detail || "Something went wrong. Please try again.",
           type: "error",
         });
+        return;
       }
+
+      setUploadStatus({
+        message: "Success! Your file has been processed.",
+        type: "success",
+      });
+
+      setSessionId(result.session_id);
+      setShowDownload(true);
+
     } catch (error) {
       setUploadStatus({
         message: "Network error. Please check your connection.",
@@ -255,6 +267,15 @@ function App() {
               </>
             )}
           </button>
+            {showDownload && (
+              <a 
+                href={`http://127.0.0.1:8000/download/${sessionId}`}
+                download
+                className="btn-primary"
+              >
+                Download Excel
+              </a>
+            )}
 
           {/* Status Message */}
           {uploadStatus.message && (
