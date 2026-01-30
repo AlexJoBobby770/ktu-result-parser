@@ -20,7 +20,6 @@ def get_department_from_regno(regno: str) -> str:
 
 def generate_excel_report(students, output_path):
 
-    # ---------- STEP 1: GROUP STUDENTS BY DEPARTMENT ----------
     dept_students = {}
 
     for student in students:
@@ -29,18 +28,16 @@ def generate_excel_report(students, output_path):
 
         dept_students.setdefault(dept, []).append(student)
 
-    # ---------- STEP 2: WRITE EXCEL ----------
+  
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
 
         for dept, dept_list in dept_students.items():
 
-            # ✅ Collect ONLY subjects of THIS department
             dept_subjects = set()
             for s in dept_list:
                 dept_subjects.update(s["subjects"].keys())
             dept_subjects = sorted(dept_subjects)
 
-            # ✅ Build rows (one row = one student)
             rows = []
 
             for s in dept_list:
@@ -57,7 +54,6 @@ def generate_excel_report(students, output_path):
             df = pd.DataFrame(rows).sort_values("Register No")
             df.to_excel(writer, sheet_name=dept, index=False)
 
-            # ---------- SUMMARY ----------
             ws = writer.sheets[dept]
             last_row = len(df) + 3
 
@@ -83,7 +79,6 @@ def generate_excel_report(students, output_path):
             ws[f"A{last_row + 3}"] = "Pass Percentage"
             ws[f"B{last_row + 3}"] = f"{round((passed_students / total_students) * 100, 2)}%"
 
-    # ---------- STYLING ----------
     wb = load_workbook(output_path)
 
     for sheet in wb.sheetnames:

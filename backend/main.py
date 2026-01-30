@@ -36,21 +36,18 @@ async def upload_result(
     pdf_file: UploadFile = File(...),
 ):
     session_id = uuid.uuid4().hex[:8]
-    
-    # Save PDF
+
     pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}.pdf")
     with open(pdf_path, "wb") as f:
         shutil.copyfileobj(pdf_file.file, f)
     
-    
-    # Parse PDF
+
     results = parse_ktu_results(pdf_path)
     
-    # Generate Excel
+
     excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
     generate_excel_report(results, excel_path)
-    
-    # Summary
+
     summary = {}
     for student in results:
         dept = student["department"]

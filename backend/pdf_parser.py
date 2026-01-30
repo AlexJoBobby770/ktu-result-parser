@@ -24,16 +24,16 @@ def parse_ktu_results(pdf_path: str):
     for line in text.splitlines():
         line = line.strip()
 
-        # Detect department
+     
         if "ENGINEERING" in line and "[FULL TIME]" in line.upper():
             current_department = line.split("[")[0].strip()
             continue
 
-        # Detect USN
+        
         usn_match = re.match(r"\b[A-Z]{3}\d{2}[A-Z]{2}\d{3}\b", line)
 
         if usn_match:
-            # Save previous student
+     
             if current_usn and current_subjects:
                 has_fail = any(
                     g in ["F", "FE", "AB", "Absent", "Withheld"]
@@ -47,16 +47,13 @@ def parse_ktu_results(pdf_path: str):
                     "status": "Fail" if has_fail else "Pass"
                 })
 
-            # Start new student
             current_usn = usn_match.group()
             current_subjects = {}
 
-        # Extract subjects
         subject_matches = re.findall(r"([A-Z]{2,6}\d{3})\(([^)]+)\)", line)
         for code, grade in subject_matches:
             current_subjects[code] = grade
 
-    # Save last student
     if current_usn and current_subjects:
         has_fail = any(
             g in ["F", "FE", "AB", "Absent", "Withheld"]
