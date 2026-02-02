@@ -6,9 +6,9 @@ import os
 import uuid
 import shutil
 
-from pdf_parser import parse_ktu_results
-from excel_generator import generate_excel_report
-from database import save_session, get_recent_sessions, get_session  # ← ADD THIS
+from .pdf_parser import parse_ktu_results
+from .excel_generator import generate_excel_report
+from database.database import save_session, get_recent_sessions, get_session
 
 app = FastAPI()
 
