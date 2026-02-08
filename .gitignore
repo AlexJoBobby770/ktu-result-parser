@@ -23,8 +23,9 @@ backend/data/*
 backend/output/*
 !backend/output/.gitkeep
 
-database/*
-!database/.gitkeep
+# Database - only ignore .db files, not Python code
+database/*.db
+database/__pycache__/
 
 output/
 
