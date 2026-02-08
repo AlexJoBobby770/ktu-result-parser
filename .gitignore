@@ -1,20 +1,22 @@
-# Node / Vite
-node_modules/
-dist/
-.vite/
-npm-debug.log*
-yarn-error.log*
+# --------------------
 # Python
+# --------------------
 venv/
+backend/venv/
 __pycache__/
 *.pyc
 
-# PDFs & outputs
-*.pdf
-backend/data/
-backend/output/
+# --------------------
+# Node / Frontend
+# --------------------
+node_modules/
+dist/
+build/
+yarn-error.log*
 
-# Data Files (IMPORTANT: Don't commit student data)
+# --------------------
+# Data / Outputs (DO NOT COMMIT)
+# --------------------
 backend/data/*
 !backend/data/.gitkeep
 
@@ -24,25 +26,26 @@ backend/output/*
 database/*
 !database/.gitkeep
 
-# IDEs
+output/
+
+# --------------------
+# PDFs & generated files
+# --------------------
+*.pdf
+*.xlsx
+
+# --------------------
+# Environment & secrets
+# --------------------
+.env
+backend/.env
+
+# --------------------
+# IDE / OS
+# --------------------
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS Files
 .DS_Store
 Thumbs.db
-
-# Environment Variables
-.env
-
-# Logs
-*.log
-
-# Excel temp files
-~$*.xlsx
-~$*.xls
-
-*.pdf
->>>>>>> a311ec7a748cdb2028d966ea3eae01212cfbff96
