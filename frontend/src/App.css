@@ -149,39 +149,6 @@
   justify-content: center;
 }
 
-.floating-card {
-  position: absolute;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  animation: float 6s ease-in-out infinite;
-}
-
-.floating-card.card-1 {
-  top: 20%;
-  left: 10%;
-  animation-delay: 0s;
-}
-
-.floating-card.card-2 {
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  animation-delay: 2s;
-}
-
-.floating-card.card-3 {
-  bottom: 20%;
-  right: 10%;
-  animation-delay: 4s;
-}
-
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-20px); }

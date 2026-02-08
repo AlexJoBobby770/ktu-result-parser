@@ -186,20 +186,6 @@ function App() {
           </div>
         </div>
         
-        <div className="hero-visual">
-          <div className="floating-card card-1">
-            <div className="card-icon">📄</div>
-            <div className="card-label">PDF Input</div>
-          </div>
-          <div className="floating-card card-2">
-            <div className="card-icon">⚡</div>
-            <div className="card-label">Processing</div>
-          </div>
-          <div className="floating-card card-3">
-            <div className="card-icon">📊</div>
-            <div className="card-label">Excel Output</div>
-          </div>
-        </div>
       </section>
 
       {/* Upload Section */}
