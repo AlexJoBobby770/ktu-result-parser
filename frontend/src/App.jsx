@@ -2,10 +2,14 @@ import "./App.css";
 import { useEffect, useState, useRef } from "react";
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import Auth from "./Auth";
 
 gsap.registerPlugin(ScrollTrigger);
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [token, setToken] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [backendStatus, setBackendStatus] = useState("checking");
   const [pdfFile, setPdfFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({ message: "", type: "" });
@@ -13,16 +17,24 @@ function App() {
   const [sessionId, setSessionId] = useState(null);
   const [showDownload, setShowDownload] = useState(false);
 
-  
   const heroRef = useRef(null);
   const uploadSectionRef = useRef(null);
   const featureCardsRef = useRef([]);
 
   useEffect(() => {
+    // Check for existing token
+    const savedToken = localStorage.getItem("token");
+    if (savedToken) {
+      setToken(savedToken);
+      verifyToken(savedToken);
+    }
+    
     checkBackendConnection();
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     // Hero animation
     if (heroRef.current) {
       gsap.fromTo(
@@ -76,10 +88,33 @@ function App() {
         );
       }
     });
-  }, []);
-  
-                      
-            
+  }, [isAuthenticated]);
+
+  const verifyToken = async (authToken) => {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/me", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        setCurrentUser(userData.username);
+        setIsAuthenticated(true);
+      } else {
+        // Token invalid, clear it
+        localStorage.removeItem("token");
+        setToken(null);
+        setIsAuthenticated(false);
+      }
+    } catch (error) {
+      console.error("Token verification error:", error);
+      localStorage.removeItem("token");
+      setToken(null);
+      setIsAuthenticated(false);
+    }
+  };
 
   const checkBackendConnection = async () => {
     try {
@@ -95,6 +130,21 @@ function App() {
     }
   };
 
+  const handleAuthSuccess = (authToken) => {
+    setToken(authToken);
+    verifyToken(authToken);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setPdfFile(null);
+    setUploadStatus({ message: "", type: "" });
+    setShowDownload(false);
+  };
+
   const handleUpload = async () => {
     if (!pdfFile) {
       setUploadStatus({ message: "Please select a PDF file", type: "error" });
@@ -104,19 +154,30 @@ function App() {
     setIsUploading(true);
     setUploadStatus({ message: "Processing your file...", type: "loading" });
 
-    
-
     try {
       const formData = new FormData();
       formData.append("pdf_file", pdfFile);
 
       const response = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: formData,
       });
 
       const result = await response.json();
+      
       if (!response.ok) {
+        if (response.status === 401) {
+          setUploadStatus({
+            message: "Session expired. Please login again.",
+            type: "error",
+          });
+          handleLogout();
+          return;
+        }
+        
         setUploadStatus({
           message: result.detail || "Something went wrong. Please try again.",
           type: "error",
@@ -142,6 +203,10 @@ function App() {
     }
   };
 
+  // Show auth screen if not authenticated
+  if (!isAuthenticated) {
+    return <Auth onAuthSuccess={handleAuthSuccess} />;
+  }
 
   return (
     <div className="app">
@@ -156,12 +221,16 @@ function App() {
             <span>KTU Processor</span>
           </div>
           <div className="nav-status">
+            <span className="nav-user">Hi, {currentUser}</span>
             <span className={`status-indicator ${backendStatus}`}></span>
             <span className="status-text">
               {backendStatus === "connected" && "Online"}
               {backendStatus === "disconnected" && "Offline"}
               {backendStatus === "checking" && "Connecting"}
             </span>
+            <button className="btn-logout" onClick={handleLogout}>
+              Logout
+            </button>
           </div>
         </div>
       </nav>
@@ -185,7 +254,6 @@ function App() {
             </button>
           </div>
         </div>
-        
       </section>
 
       {/* Upload Section */}
@@ -199,7 +267,6 @@ function App() {
 
         <div className="upload-container">
           <div className="upload-grid-single">
-            {/* PDF Upload */}
             <div className="upload-card upload-card-single">
               <div className="upload-icon">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
@@ -233,7 +300,6 @@ function App() {
             </div>
           </div>
 
-          {/* Process Button */}
           <button
             className={`btn-process ${(!pdfFile || isUploading) ? 'disabled' : ''}`}
             onClick={handleUpload}
@@ -253,17 +319,36 @@ function App() {
               </>
             )}
           </button>
-            {showDownload && (
-              <a 
-                href={`http://127.0.0.1:8000/download/${sessionId}`}
-                download
-                className="btn-primary"
-              >
-                Download Excel
-              </a>
-            )}
 
-          {/* Status Message */}
+          {showDownload && (
+            <a 
+              href={`http://127.0.0.1:8000/download/${sessionId}`}
+              download
+              className="btn-primary"
+              onClick={(e) => {
+                e.preventDefault();
+                fetch(`http://127.0.0.1:8000/download/${sessionId}`, {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                })
+                  .then(response => response.blob())
+                  .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `KTU_Results_${sessionId}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                  });
+              }}
+            >
+              Download Excel
+            </a>
+          )}
+
           {uploadStatus.message && (
             <div className={`upload-status ${uploadStatus.type}`}>
               <div className="status-icon">
@@ -331,7 +416,7 @@ function App() {
             </div>
             <h3 className="feature-title">Secure</h3>
             <p className="feature-description">
-              Your data is processed locally and never stored on our servers
+              Your data is encrypted and protected with JWT authentication
             </p>
           </div>
         </div>
