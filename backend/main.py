@@ -7,9 +7,9 @@ import uuid
 import shutil
 from datetime import timedelta
 
-from pdf_parser import parse_ktu_results
-from excel_generator import generate_excel_report
-from auth import (
+from .pdf_parser import parse_ktu_results
+from .excel_generator import generate_excel_report
+from .auth import (
     UserLogin, UserRegister, Token,
     get_password_hash, verify_password, create_access_token,
     get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
