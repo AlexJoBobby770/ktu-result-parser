@@ -1,72 +1,75 @@
-KTU Result PDF → Excel Processor
+Automated system to convert KTU exam result PDFs into structured Excel reports.
+Features
 
-Backend system to convert KTU result PDFs (text-layer) into structured Excel reports.
-
-No OCR. No ML. Deterministic parsing using regex.
+PDF to Excel Conversion - Parse KTU result PDFs and generate organized spreadsheets
+Department-wise Separation - Automatic grouping by engineering branches (CSE, ECE, EEE, ME, CE)
+Pass/Fail Analysis - Built-in status tracking and summary statistics
+User Authentication - Secure JWT-based login system
+Session Persistence - SQLite database stores upload history
 
 Tech Stack
+Backend:
 
-Backend: Python, FastAPI
+Python 3.x
+FastAPI
+PyPDF2 (PDF parsing)
+pandas + openpyxl (Excel generation)
+SQLite (session storage)
 
-PDF Parsing: PyPDF2 + regex
+Frontend:
 
-Excel: pandas, openpyxl
+React 18
+Vite
+GSAP (animations)
 
-Frontend: React (Vite)
+Installation
+Backend Setup
+bash# Install dependencies
+pip install -r requirements.txt
 
-DB (planned): SQLite
-
-Current Status
-✅ Working
-
-FastAPI backend running
-
-/upload endpoint implemented
-
-PDF parsing works (student-level)
-
-Excel generation works
-
-React frontend connected and usable
-
-🔄 In Progress
-
-Frontend UI improvements
-
-Better upload feedback & UX
-
-⏳ Planned
-
-Excel download endpoint polish
-
-Stats API (pass/fail, dept-wise)
-
-Charts & visualization
-
-Basic error handling
-
-Project Structure
-backend/    → FastAPI, parsing, Excel generation
-frontend/   → React (Vite)
-
-Running (Dev)
-
-Backend
-
+# Start server
 cd backend
-uvicorn main:app --reload
-
-
-Frontend
-
+python main.py
+Server runs at http://localhost:8000
+Frontend Setup
+bash# Install dependencies
 cd frontend
 npm install
+
+# Start dev server
 npm run dev
+```
 
-Notes
+Frontend runs at `http://localhost:5173`
 
-PDFs, outputs, and node_modules are git-ignored
+## Usage
 
-Backend is frontend-agnostic
+1. **Register/Login** - Create an account or sign in
+2. **Upload PDF** - Select your KTU result PDF file
+3. **Process** - Click "Process File" to parse the document
+4. **Download** - Get the generated Excel report
 
-Focus is correctness first, UI later
+## Project Structure
+```
+├── backend/
+│   ├── main.py           # FastAPI server
+│   ├── pdf_parser.py     # PDF text extraction + regex parsing
+│   ├── excel_generator.py # Excel file generation
+│   └── auth.py           # JWT authentication
+├── database/
+│   └── database.py       # SQLite operations
+├── frontend/
+│   └── src/
+│       ├── App.jsx       # Main application
+│       └── Auth.jsx      # Login/Register component
+└── requirements.txt
+Excel Output Format
+Generated Excel files include:
+
+Department Sheets - Separate tabs for CSE, ECE, EEE, ME, CE
+Summary Statistics - Total students, pass/fail counts, percentages
+Color Coding - Failed grades highlighted in red
+Formatted Headers - Professional styling with bold headers
+
+API Endpoints
+EndpointMethodDescription/healthGETServer status check/registerPOSTCreate new user account/loginPOSTAuthenticate user/uploadPOSTUpload and process PDF/download/{session_id}GETDownload generated Excel/sessionsGETView upload history
