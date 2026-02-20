@@ -1,11 +1,10 @@
-# database/database.py
+
 import sqlite3
 import os
 from datetime import datetime
 from typing import List, Dict, Optional
 
-# Absolute path so the .db file always saves next to this file
-# regardless of where uvicorn is run from
+
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ktu_results.db")
 
 
@@ -144,5 +143,4 @@ def get_session(session_id: str, username: str = None) -> Optional[Dict]:
     return dict(row) if row else None
 
 
-# Initialize DB when module is imported
 init_db()
