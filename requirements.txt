@@ -7,3 +7,4 @@ PyPDF2==3.0.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==3.2.2
 psycopg2-binary==2.9.9
+xlsxwriter==3.1.9
