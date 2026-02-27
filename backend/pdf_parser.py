@@ -1,6 +1,8 @@
+# backend/pdf_parser.py
 import re
-from typing import List, Dict
+from typing import List
 import PyPDF2
+from models import ExternalRecord, grade_to_marks
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -12,10 +14,14 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     return text
 
 
-def parse_ktu_results(pdf_path: str):
-
+def parse_ktu_results(pdf_path: str) -> List[ExternalRecord]:
+    """
+    Parse KTU result PDF and return list of ExternalRecord objects
+    with numeric marks converted from grades
+    """
+    
     text = extract_text_from_pdf(pdf_path)
-    students = []
+    records = []
 
     current_department = None
     current_usn = None
@@ -24,58 +30,68 @@ def parse_ktu_results(pdf_path: str):
     for line in text.splitlines():
         line = line.strip()
 
-     
+        # Detect department
         if "ENGINEERING" in line and "[FULL TIME]" in line.upper():
             current_department = line.split("[")[0].strip()
             continue
 
-        
+        # Detect register number
         usn_match = re.match(r"\b[A-Z]{3}\d{2}[A-Z]{2}\d{3}\b", line)
 
         if usn_match:
-     
+            # Save previous student's records
             if current_usn and current_subjects:
-                has_fail = any(
-                    g in ["F", "FE", "AB", "Absent", "Withheld"]
-                    for g in current_subjects.values()
-                )
-                students.append({
-                    "register_no": current_usn,
-                    "name": "",  
-                    "department": current_department,
-                    "subjects": current_subjects,
-                    "status": "Fail" if has_fail else "Pass"
-                })
+                for subj_code, grade in current_subjects.items():
+                    records.append(ExternalRecord(
+                        register_no=current_usn,
+                        subject_code=subj_code,
+                        grade=grade,
+                        external_mark=grade_to_marks(grade)
+                    ))
 
             current_usn = usn_match.group()
             current_subjects = {}
 
+        # Extract subject codes and grades
         subject_matches = re.findall(r"([A-Z]{2,6}\d{3})\(([^)]+)\)", line)
         for code, grade in subject_matches:
             current_subjects[code] = grade
 
+    # Save last student
     if current_usn and current_subjects:
-        has_fail = any(
-            g in ["F", "FE", "AB", "Absent", "Withheld"]
-            for g in current_subjects.values()
-        )
-        students.append({
-            "register_no": current_usn,
-            "name": "",
-            "department": current_department,
-            "subjects": current_subjects,
-            "status": "Fail" if has_fail else "Pass"
-        })
+        for subj_code, grade in current_subjects.items():
+            records.append(ExternalRecord(
+                register_no=current_usn,
+                subject_code=subj_code,
+                grade=grade,
+                external_mark=grade_to_marks(grade)
+            ))
 
-    return students
+    return records
+
+
+def get_department_from_regno(regno: str) -> str:
+    """Extract department from register number"""
+    regno = regno.upper()
+    if "EE" in regno and "EEE" not in regno:
+        return "EEE"
+    if "EC" in regno:
+        return "ECE"
+    if "CS" in regno:
+        return "CSE"
+    if "ME" in regno:
+        return "ME"
+    if "CE" in regno and "ECE" not in regno:
+        return "CE"
+    return "OTHER"
 
 
 if __name__ == "__main__":
     import sys
-    pdf = sys.argv[1] if len(sys.argv) > 1 else "../master .pdf"
+    pdf = sys.argv[1] if len(sys.argv) > 1 else "master_.pdf"
     
     results = parse_ktu_results(pdf)
-    print(f"✅ Parsed {len(results)} students\n")
+    print(f"✅ Parsed {len(results)} records\n")
     
-    for s in results[:3]:
-        print(s)
+    for r in results[:5]:
+        print(f"{r.register_no} - {r.subject_code}: {r.grade} ({r.external_mark} marks)")
