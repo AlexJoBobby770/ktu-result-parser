@@ -11,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import shutil
 from datetime import timedelta
+from internal_parser import parse_internal_marks
+from data_merger import merge_results
 
 # Relative imports removed — now plain imports since we cd into backend/
 from pdf_parser import parse_ktu_results
@@ -120,44 +122,71 @@ def health():
 
 @app.post("/upload")
 async def upload_result(
-    pdf_file: UploadFile = File(...),
+    pdf_file: UploadFile = File(..., description="KTU External Results PDF"),
+    internal_file: UploadFile = File(..., description="Internal Marks PDF"),
     current_user: str = Depends(get_current_user)
 ):
+    """
+    Upload both external results PDF and internal marks PDF,
+    merge them, and generate comprehensive Excel report
+    """
     session_id = uuid.uuid4().hex[:8]
 
-    pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}.pdf")
-    with open(pdf_path, "wb") as f:
+    # Save external results PDF
+    external_pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}_external.pdf")
+    with open(external_pdf_path, "wb") as f:
         shutil.copyfileobj(pdf_file.file, f)
 
-    results = parse_ktu_results(pdf_path)
+    # Save internal marks PDF
+    internal_pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}_internal.pdf")
+    with open(internal_pdf_path, "wb") as f:
+        shutil.copyfileobj(internal_file.file, f)
 
-    excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
-    generate_excel_report(results, excel_path)
-
-    summary = {}
-    for student in results:
-        dept = student["department"]
-        if dept not in summary:
-            summary[dept] = {"total_students": 0, "with_arrears": 0}
-        summary[dept]["total_students"] += 1
-        if student["status"] == "Fail":
-            summary[dept]["with_arrears"] += 1
-
-    save_session(
-        session_id=session_id,
-        filename=pdf_file.filename,
-        total_students=len(results),
-        total_departments=len(summary),
-        username=current_user
-    )
-
-    return {
-        "message": f"Successfully parsed {len(results)} students",
-        "session_id": session_id,
-        "total_students": len(results),
-        "departments": summary,
-        "excel_ready": True
-    }
+    try:
+        # Parse external results
+        external_records = parse_ktu_results(external_pdf_path)
+        
+        # Parse internal marks
+        internal_records, name_mapping = parse_internal_marks(internal_pdf_path)
+        
+        # Merge data
+        merged_records, merge_stats = merge_results(
+            internal_records,
+            external_records,
+            name_mapping
+        )
+        
+        # Generate Excel
+        excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
+        generate_excel_report(merged_records, excel_path)
+        
+        # Calculate summary
+        total_students = merge_stats['unique_students']
+        passed_students = sum(1 for r in merged_records if r.result == "Pass")
+        
+        # Save session
+        save_session(
+            session_id=session_id,
+            filename=f"{pdf_file.filename} + {internal_file.filename}",
+            total_students=total_students,
+            total_departments=len(set(r.department for r in merged_records)),
+            username=current_user
+        )
+        
+        return {
+            "message": f"Successfully processed {total_students} students",
+            "session_id": session_id,
+            "total_students": total_students,
+            "passed_students": passed_students,
+            "merge_stats": merge_stats,
+            "excel_ready": True
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Processing failed: {str(e)}"
+        )
 
 
 @app.get("/download/{session_id}")
