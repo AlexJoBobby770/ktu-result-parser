@@ -24,6 +24,7 @@ function App() {
         currentUser={currentUser}
         backendStatus={backendStatus}
         onLogout={handleLogout}
+        uploadSectionRef={uploadSectionRef}
       />
       <Hero uploadSectionRef={uploadSectionRef} />
       <UploadSection
