@@ -10,12 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import shutil
 from datetime import timedelta
+from typing import Optional
 
-# Import new modules
+from pdf_parser import parse_ktu_results
+from excel_generator import generate_excel_report  # Keep old generator as fallback
+from excel_generator_v2 import generate_merged_excel  # New beautiful generator
 from internal_parser import parse_internal_marks
 from data_merger import merge_results
-from pdf_parser import parse_ktu_results
-from excel_generator_v2 import generate_merged_excel  # NEW!
+from models import ExternalRecord
 
 from auth import (
     UserLogin, UserRegister, Token,
@@ -121,13 +123,14 @@ def health():
 @app.post("/upload")
 async def upload_result(
     pdf_file: UploadFile = File(..., description="KTU External Results PDF"),
-    internal_file: UploadFile = File(None, description="Internal Marks PDF (optional)"),
+    internal_file: Optional[UploadFile] = File(None, description="Internal Marks PDF (optional)"),
     current_user: str = Depends(get_current_user)
 ):
     """
-    Upload external results PDF (required) and internal marks PDF (optional).
-    If internal marks provided, generates merged report with names.
-    If not, generates basic report with just external marks.
+    Upload external results PDF (required) and optionally internal marks PDF.
+    
+    - If only external PDF: Uses old excel_generator (simple format)
+    - If both PDFs: Uses excel_generator_v2 (beautiful 5-sheet format)
     """
     session_id = uuid.uuid4().hex[:8]
 
@@ -135,114 +138,112 @@ async def upload_result(
     external_pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}_external.pdf")
     with open(external_pdf_path, "wb") as f:
         shutil.copyfileobj(pdf_file.file, f)
+    await pdf_file.close()
 
     try:
-        # Parse external results
-        external_records = parse_ktu_results(external_pdf_path)
+        # Parse external results (always required)
+        print(f"📄 Parsing external PDF: {pdf_file.filename}")
+        external_students = parse_ktu_results(external_pdf_path)
         
-        if internal_file:
-            # Save internal marks PDF
+        total_students = len(external_students)
+        total_departments = len(set(s.get("department", "OTHER") for s in external_students))
+        
+        excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
+        
+        # CASE 1: Only external PDF (use old simple generator)
+        if internal_file is None:
+            print("📊 Generating simple Excel (external only)...")
+            
+            # Use old generator
+            generate_excel_report(external_students, excel_path)
+            
+            passed_students = sum(1 for s in external_students if s.get("status") == "Pass")
+            
+            # Save session
+            save_session(
+                session_id=session_id,
+                filename=pdf_file.filename,
+                total_students=total_students,
+                total_departments=total_departments,
+                username=current_user
+            )
+            
+            return {
+                "message": f"Successfully processed {total_students} students (external only)",
+                "session_id": session_id,
+                "total_students": total_students,
+                "passed_students": passed_students,
+                "has_internal_marks": False,
+                "excel_ready": True
+            }
+        
+        # CASE 2: Both PDFs provided (use new beautiful generator)
+        else:
+            print(f"📄 Parsing internal PDF: {internal_file.filename}")
+            
+            # Save internal PDF
             internal_pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}_internal.pdf")
             with open(internal_pdf_path, "wb") as f:
                 shutil.copyfileobj(internal_file.file, f)
+            await internal_file.close()
             
             # Parse internal marks
             internal_records, name_mapping = parse_internal_marks(internal_pdf_path)
             
+            # Convert external students to ExternalRecord objects
+            external_records = []
+            for student in external_students:
+                for subject_code, grade in student["subjects"].items():
+                    from models import grade_to_marks
+                    external_records.append(ExternalRecord(
+                        register_no=student["register_no"],
+                        subject_code=subject_code,
+                        grade=grade,
+                        external_mark=grade_to_marks(grade)
+                    ))
+            
             # Merge data
+            print("🔄 Merging internal + external data...")
             merged_records, merge_stats = merge_results(
                 internal_records,
                 external_records,
                 name_mapping
             )
             
-            # Generate enhanced Excel
-            excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
+            # Generate beautiful Excel
+            print("✨ Generating beautiful Excel report...")
             generate_merged_excel(merged_records, excel_path)
             
-            total_students = merge_stats['unique_students']
+            # Calculate summary
+            unique_students = merge_stats['unique_students']
             passed_records = sum(1 for r in merged_records if r.result == "Pass")
             
+            # Save session
             save_session(
                 session_id=session_id,
                 filename=f"{pdf_file.filename} + {internal_file.filename}",
-                total_students=total_students,
+                total_students=unique_students,
                 total_departments=len(set(r.department for r in merged_records)),
                 username=current_user
             )
             
             return {
-                "message": f"Successfully processed {total_students} students with merged data",
+                "message": f"Successfully processed {unique_students} students with internal marks",
                 "session_id": session_id,
-                "total_students": total_students,
-                "total_records": len(merged_records),
-                "passed_records": passed_records,
+                "total_students": unique_students,
+                "passed_students": passed_records,
                 "merge_stats": merge_stats,
-                "excel_ready": True,
-                "has_internal_marks": True
-            }
-        
-        else:
-            # No internal marks - just external results
-            # Convert ExternalRecord to simple dict for old excel generator
-            from excel_generator import generate_excel_report
-            
-            students = {}
-            for record in external_records:
-                if record.register_no not in students:
-                    students[record.register_no] = {
-                        "register_no": record.register_no,
-                        "name": "",
-                        "department": get_department_from_regno(record.register_no),
-                        "subjects": {},
-                        "status": "Pass"
-                    }
-                students[record.register_no]["subjects"][record.subject_code] = record.grade
-                if record.grade in ["F", "FE", "AB", "Absent", "Withheld"]:
-                    students[record.register_no]["status"] = "Fail"
-            
-            excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
-            generate_excel_report(list(students.values()), excel_path)
-            
-            total_students = len(students)
-            
-            save_session(
-                session_id=session_id,
-                filename=pdf_file.filename,
-                total_students=total_students,
-                total_departments=len(set(s["department"] for s in students.values())),
-                username=current_user
-            )
-            
-            return {
-                "message": f"Successfully processed {total_students} students (external marks only)",
-                "session_id": session_id,
-                "total_students": total_students,
-                "excel_ready": True,
-                "has_internal_marks": False
+                "has_internal_marks": True,
+                "excel_ready": True
             }
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Processing failed: {str(e)}"
         )
-
-
-def get_department_from_regno(regno: str) -> str:
-    """Extract department from register number"""
-    regno = regno.upper()
-    if "EE" in regno and "EEE" not in regno:
-        return "EEE"
-    if "EC" in regno:
-        return "ECE"
-    if "CS" in regno:
-        return "CSE"
-    if "ME" in regno:
-        return "ME"
-    if "CE" in regno and "ECE" not in regno:
-        return "CE"
-    return "OTHER"
 
 
 @app.get("/download/{session_id}")
@@ -299,4 +300,8 @@ def get_session_details(
 
 if __name__ == "__main__":
     import uvicorn
+    print("🚀 Starting server at http://localhost:8000")
+    print("📝 Frontend compatible mode:")
+    print("   - Single PDF upload: Simple Excel format")
+    print("   - Two PDF upload (future): Beautiful 5-sheet format")
     uvicorn.run("main:app", reload=True, port=8000)
