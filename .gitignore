@@ -1,53 +1,31 @@
-# --------------------
 # Python
-# --------------------
-.venv/
-venv/
 __pycache__/
 *.pyc
+*.pyo
+.venv/
+venv/
 
-
-# --------------------
-# Node / Frontend
-# --------------------
-node_modules/
-dist/
-build/
-yarn-error.log*
-
-# --------------------
-# Data / Outputs (DO NOT COMMIT)
-# --------------------
+# Data & Outputs
 backend/data/*
 !backend/data/.gitkeep
-
 backend/output/*
 !backend/output/.gitkeep
 
-# Database - only ignore .db files, not Python code
+# Database
 database/*.db
-database/__pycache__/
 
-output/
-
-# --------------------
-# PDFs & generated files
-# --------------------
+# PDFs & Excel
 *.pdf
 *.xlsx
 
-# --------------------
-# Environment & secrets
-# --------------------
+# Environment
 .env
-backend/.env
 
-# --------------------
-# IDE / OS
-# --------------------
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 .DS_Store
-Thumbs.db
+
+# Frontend
+node_modules/
+dist/
