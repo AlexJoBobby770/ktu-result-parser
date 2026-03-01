@@ -13,30 +13,24 @@ from datetime import timedelta
 from typing import Optional
 
 from pdf_parser import parse_ktu_results
-from excel_generator import generate_excel_report  # Keep old generator as fallback
-from excel_generator_v2 import generate_merged_excel  # New beautiful generator
+from excel_generator import generate_excel_report
+from excel_generator_v2 import generate_merged_excel
 from internal_parser import parse_internal_marks
 from data_merger import merge_results
-from models import ExternalRecord
+from models import ExternalRecord, grade_to_marks
 
 from auth import (
     UserLogin, UserRegister, Token,
     get_password_hash, verify_password, create_access_token,
     get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from database.database import (
-    save_session, get_recent_sessions, get_session,
-    create_user, get_user_by_username
-)
+from database.database import create_user, get_user_by_username
 
-app = FastAPI()
+app = FastAPI(title="KTU Result Processor API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,48 +47,30 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 @app.post("/register", response_model=Token)
 async def register(user: UserRegister):
-    existing_user = get_user_by_username(user.username)
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
-        )
+    if get_user_by_username(user.username):
+        raise HTTPException(status_code=400, detail="Username already registered")
 
     hashed_password = get_password_hash(user.password)
-    success = create_user(user.username, user.email, hashed_password)
+    if not create_user(user.username, user.email, hashed_password):
+        raise HTTPException(status_code=500, detail="Could not create user")
 
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not create user"
-        )
-
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username},
-        expires_delta=access_token_expires
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.post("/login", response_model=Token)
 async def login(user: UserLogin):
     db_user = get_user_by_username(user.username)
-
     if not db_user or not verify_password(user.password, db_user["hashed_password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
 
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username},
-        expires_delta=access_token_expires
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -103,12 +79,7 @@ async def get_me(current_user: str = Depends(get_current_user)):
     user = get_user_by_username(current_user)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    return {
-        "username": user["username"],
-        "email": user["email"],
-        "created_at": user["created_at"]
-    }
+    return {"username": user["username"], "email": user["email"]}
 
 
 # ==================== PUBLIC ROUTES ====================
@@ -118,83 +89,58 @@ def health():
     return {"status": "ok", "message": "Backend is running"}
 
 
-# ==================== PROTECTED ROUTES ====================
+# ==================== FILE PROCESSING ====================
 
 @app.post("/upload")
 async def upload_result(
-    pdf_file: UploadFile = File(..., description="KTU External Results PDF"),
-    internal_file: Optional[UploadFile] = File(None, description="Internal Marks PDF (optional)"),
+    pdf_file: UploadFile = File(...),
+    internal_file: Optional[UploadFile] = File(None),
     current_user: str = Depends(get_current_user)
 ):
-    """
-    Upload external results PDF (required) and optionally internal marks PDF.
+    """Process KTU result PDF with optional internal marks"""
     
-    - If only external PDF: Uses old excel_generator (simple format)
-    - If both PDFs: Uses excel_generator_v2 (beautiful 5-sheet format)
-    """
     session_id = uuid.uuid4().hex[:8]
-
-    # Save external results PDF
     external_pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}_external.pdf")
+    
+    # Save external PDF
     with open(external_pdf_path, "wb") as f:
         shutil.copyfileobj(pdf_file.file, f)
     await pdf_file.close()
 
     try:
-        # Parse external results (always required)
         print(f"📄 Parsing external PDF: {pdf_file.filename}")
         external_students = parse_ktu_results(external_pdf_path)
         
-        total_students = len(external_students)
-        total_departments = len(set(s.get("department", "OTHER") for s in external_students))
-        
         excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
         
-        # CASE 1: Only external PDF (use old simple generator)
+        # CASE 1: External only (simple format)
         if internal_file is None:
-            print("📊 Generating simple Excel (external only)...")
-            
-            # Use old generator
+            print("📊 Generating simple Excel...")
             generate_excel_report(external_students, excel_path)
             
-            passed_students = sum(1 for s in external_students if s.get("status") == "Pass")
-            
-            # Save session
-            save_session(
-                session_id=session_id,
-                filename=pdf_file.filename,
-                total_students=total_students,
-                total_departments=total_departments,
-                username=current_user
-            )
-            
             return {
-                "message": f"Successfully processed {total_students} students (external only)",
+                "message": f"Processed {len(external_students)} students",
                 "session_id": session_id,
-                "total_students": total_students,
-                "passed_students": passed_students,
-                "has_internal_marks": False,
-                "excel_ready": True
+                "total_students": len(external_students),
+                "passed_students": sum(1 for s in external_students if s.get("status") == "Pass"),
+                "has_internal_marks": False
             }
         
-        # CASE 2: Both PDFs provided (use new beautiful generator)
+        # CASE 2: Both PDFs (beautiful format)
         else:
             print(f"📄 Parsing internal PDF: {internal_file.filename}")
-            
-            # Save internal PDF
             internal_pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}_internal.pdf")
+            
             with open(internal_pdf_path, "wb") as f:
                 shutil.copyfileobj(internal_file.file, f)
             await internal_file.close()
             
-            # Parse internal marks
+            # Parse and merge
             internal_records, name_mapping = parse_internal_marks(internal_pdf_path)
             
-            # Convert external students to ExternalRecord objects
             external_records = []
             for student in external_students:
                 for subject_code, grade in student["subjects"].items():
-                    from models import grade_to_marks
                     external_records.append(ExternalRecord(
                         register_no=student["register_no"],
                         subject_code=subject_code,
@@ -202,69 +148,37 @@ async def upload_result(
                         external_mark=grade_to_marks(grade)
                     ))
             
-            # Merge data
-            print("🔄 Merging internal + external data...")
+            print("🔄 Merging data...")
             merged_records, merge_stats = merge_results(
-                internal_records,
-                external_records,
-                name_mapping
+                internal_records, external_records, name_mapping
             )
             
-            # Generate beautiful Excel
-            print("✨ Generating beautiful Excel report...")
+            print("✨ Generating beautiful Excel...")
             generate_merged_excel(merged_records, excel_path)
             
-            # Calculate summary
-            unique_students = merge_stats['unique_students']
-            passed_records = sum(1 for r in merged_records if r.result == "Pass")
-            
-            # Save session
-            save_session(
-                session_id=session_id,
-                filename=f"{pdf_file.filename} + {internal_file.filename}",
-                total_students=unique_students,
-                total_departments=len(set(r.department for r in merged_records)),
-                username=current_user
-            )
-            
             return {
-                "message": f"Successfully processed {unique_students} students with internal marks",
+                "message": f"Processed {merge_stats['unique_students']} students with internal marks",
                 "session_id": session_id,
-                "total_students": unique_students,
-                "passed_students": passed_records,
-                "merge_stats": merge_stats,
+                "total_students": merge_stats['unique_students'],
+                "passed_students": sum(1 for r in merged_records if r.result == "Pass"),
                 "has_internal_marks": True,
-                "excel_ready": True
+                "merge_stats": merge_stats
             }
         
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Processing failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 @app.get("/download/{session_id}")
-def download_excel(
-    session_id: str,
-    current_user: str = Depends(get_current_user)
-):
-    session = get_session(session_id, username=current_user)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found or you don't have permission"
-        )
-
+def download_excel(session_id: str, current_user: str = Depends(get_current_user)):
+    """Download processed Excel file"""
+    
     excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
-
+    
     if not os.path.exists(excel_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Excel file not found"
-        )
+        raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(
         excel_path,
@@ -273,35 +187,10 @@ def download_excel(
     )
 
 
-@app.get("/sessions")
-def get_sessions(current_user: str = Depends(get_current_user)):
-    sessions = get_recent_sessions(limit=10, username=current_user)
-    return {"sessions": sessions}
-
-
-@app.get("/sessions/{session_id}")
-def get_session_details(
-    session_id: str,
-    current_user: str = Depends(get_current_user)
-):
-    session = get_session(session_id, username=current_user)
-
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-
-    excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
-    session["excel_available"] = os.path.exists(excel_path)
-
-    return session
-
-
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting server at http://localhost:8000")
-    print("📝 Frontend compatible mode:")
-    print("   - Single PDF upload: Simple Excel format")
-    print("   - Two PDF upload (future): Beautiful 5-sheet format")
+    print("🚀 KTU Result Processor API")
+    print("📍 http://localhost:8000")
+    print("📄 Single PDF → Simple Excel")
+    print("📄📄 Two PDFs → Beautiful Excel")
     uvicorn.run("main:app", reload=True, port=8000)
