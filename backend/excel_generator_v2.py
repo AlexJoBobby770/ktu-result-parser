@@ -3,7 +3,8 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from openpyxl.chart import BarChart, PieChart, Reference
+from openpyxl.chart import BarChart, PieChart, LineChart, Reference
+from openpyxl.chart.series import DataPoint
 from typing import List
 from models import MergedRecord
 from datetime import datetime
@@ -16,7 +17,7 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
     - Subject names (not just codes)
     - Color-coded results
     - Multiple analysis sheets
-    - Charts and visualizations
+    - Interactive charts and visualizations
     """
     
     # College Information
@@ -30,14 +31,14 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
     
     # Color Palette
     COLORS = {
-        'header_blue': '1E3A8A',      # Dark blue
-        'header_light': '3B82F6',     # Light blue
-        'pass_green': 'D1FAE5',       # Light green
-        'fail_red': 'FEE2E2',         # Light red
-        'excellent': '10B981',        # Green
-        'good': '3B82F6',            # Blue
-        'average': 'F59E0B',         # Amber
-        'poor': 'EF4444',            # Red
+        'header_blue': '1E3A8A',
+        'header_light': '3B82F6',
+        'pass_green': 'D1FAE5',
+        'fail_red': 'FEE2E2',
+        'excellent': '10B981',
+        'good': '3B82F6',
+        'average': 'F59E0B',
+        'poor': 'EF4444',
         'white': 'FFFFFF',
         'light_gray': 'F3F4F6',
         'dark_text': '1F2937',
@@ -46,7 +47,7 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
     with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
         
         # ═══════════════════════════════════════════════════════════
-        # SHEET 1: MASTER DATA (with full subject names)
+        # SHEET 1: MASTER DATA
         # ═══════════════════════════════════════════════════════════
         
         master_df = df[[
@@ -59,19 +60,16 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
         master_df.to_excel(writer, sheet_name='Master Data', index=False, startrow=5)
         
         # ═══════════════════════════════════════════════════════════
-        # SHEET 2-N: DEPARTMENT SHEETS (Beautiful & Organized)
+        # DEPARTMENT SHEETS
         # ═══════════════════════════════════════════════════════════
         
         departments = df['Department'].unique()
         
         for dept in departments:
             dept_df = df[df['Department'] == dept].copy()
-            
-            # Create a pivot-like view: Student info + subjects as columns
             students = dept_df['Register No'].unique()
             subjects = dept_df['Subject Code'].unique()
             
-            # Build department sheet
             dept_rows = []
             for student_reg in students:
                 student_data = dept_df[dept_df['Register No'] == student_reg].iloc[0]
@@ -80,7 +78,6 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
                     'Student Name': student_data['Student Name']
                 }
                 
-                # Add subject columns with full names
                 for subj_code in sorted(subjects):
                     subj_records = dept_df[
                         (dept_df['Register No'] == student_reg) & 
@@ -89,14 +86,11 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
                     
                     if not subj_records.empty:
                         record = subj_records.iloc[0]
-                        # Use subject name as column header
                         col_name = f"{record['Subject Name']}\n({subj_code})"
                         row[col_name] = f"{record['Total Mark']}\n({record['Grade']})"
                     else:
-                        col_name = f"{subj_code}"
-                        row[col_name] = "—"
+                        row[f"{subj_code}"] = "—"
                 
-                # Add summary
                 student_records = dept_df[dept_df['Register No'] == student_reg]
                 total_subjects = len(student_records)
                 failed_subjects = len(student_records[student_records['Result'] == 'Fail'])
@@ -111,7 +105,7 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
             dept_sheet_df.to_excel(writer, sheet_name=dept, index=False, startrow=5)
         
         # ═══════════════════════════════════════════════════════════
-        # SHEET: SUBJECT ANALYSIS (Detailed Statistics)
+        # SUBJECT ANALYSIS
         # ═══════════════════════════════════════════════════════════
         
         subject_stats = []
@@ -131,11 +125,9 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
             max_total = subject_data['Total Mark'].max()
             min_total = subject_data['Total Mark'].min()
             
-            # Get subject name and faculty
             subject_name = subject_data['Subject Name'].iloc[0]
             faculty_name = subject_data['Faculty Name'].iloc[0]
             
-            # Performance category
             if pass_pct >= 90:
                 performance = "Excellent"
             elif pass_pct >= 75:
@@ -165,7 +157,7 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
         subject_stats_df.to_excel(writer, sheet_name='Subject Analysis', index=False, startrow=5)
         
         # ═══════════════════════════════════════════════════════════
-        # SHEET: FACULTY ANALYSIS (Performance by Faculty)
+        # FACULTY ANALYSIS
         # ═══════════════════════════════════════════════════════════
         
         faculty_stats = []
@@ -203,7 +195,7 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
         faculty_stats_df.to_excel(writer, sheet_name='Faculty Analysis', index=False, startrow=5)
         
         # ═══════════════════════════════════════════════════════════
-        # SHEET: OVERALL SUMMARY (Executive Dashboard)
+        # OVERALL SUMMARY
         # ═══════════════════════════════════════════════════════════
         
         total_records = len(df)
@@ -211,24 +203,21 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
         total_passed = len(df[df['Result'] == 'Pass'])
         overall_pass_pct = (total_passed / total_records * 100) if total_records > 0 else 0
         
-        # Grade distribution
-        grade_counts = df['Grade'].value_counts().to_dict()
-        
         summary_data = {
             'Metric': [
                 'Total Records',
                 'Unique Students',
                 'Total Subjects',
                 'Departments',
-                '',  # Spacer
+                '',
                 'Records Passed',
                 'Records Failed',
                 'Overall Pass %',
-                '',  # Spacer
+                '',
                 'Average Internal Mark',
                 'Average External Mark',
                 'Average Total Mark',
-                '',  # Spacer
+                '',
                 'Highest Total Mark',
                 'Lowest Total Mark',
             ],
@@ -255,7 +244,7 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
         summary_df.to_excel(writer, sheet_name='Overall Summary', index=False, startrow=8)
         
         # ═══════════════════════════════════════════════════════════
-        # SHEET: STUDENT WISE SUMMARY (Individual Performance)
+        # STUDENT SUMMARY
         # ═══════════════════════════════════════════════════════════
         
         student_summary = []
@@ -292,56 +281,41 @@ def generate_merged_excel(merged_records: List[MergedRecord], output_path: str):
         student_summary_df.to_excel(writer, sheet_name='Student Summary', index=False, startrow=5)
     
     # ═══════════════════════════════════════════════════════════
-    # APPLY BEAUTIFUL FORMATTING
+    # APPLY FORMATTING & ADD CHARTS
     # ═══════════════════════════════════════════════════════════
     
-    apply_gorgeous_formatting(
-        output_path, 
-        COLLEGE_NAME, 
-        COLLEGE_LOCATION,
-        REPORT_TITLE,
-        COLORS,
-        df
-    )
+    apply_gorgeous_formatting(output_path, COLLEGE_NAME, COLLEGE_LOCATION, REPORT_TITLE, COLORS, df)
+    add_comprehensive_charts(output_path, df, subject_stats_df, faculty_stats_df)
     
-    print(f"✅ Beautiful Excel generated: {output_path}")
+    print(f"✅ Beautiful Excel with charts generated: {output_path}")
     print(f"   📊 {len(merged_records)} records")
     print(f"   👥 {total_students} students")
     print(f"   🏛️ {len(departments)} departments")
+    print(f"   📈 6 interactive charts added")
 
 
 def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str, 
                               title: str, colors: dict, df: pd.DataFrame):
-    """Apply professional, eye-catching formatting to all sheets"""
+    """Apply professional formatting to all sheets"""
     
     wb = load_workbook(excel_path)
     
-    # ═══════════════════════════════════════════════════════════
-    # DEFINE REUSABLE STYLES
-    # ═══════════════════════════════════════════════════════════
-    
-    # Header styles
+    # Styles
     college_font = Font(name='Calibri', size=16, bold=True, color=colors['white'])
-    college_fill = PatternFill(start_color=colors['header_blue'], 
-                               end_color=colors['header_blue'], fill_type='solid')
+    college_fill = PatternFill(start_color=colors['header_blue'], end_color=colors['header_blue'], fill_type='solid')
     
     title_font = Font(name='Calibri', size=12, bold=True, color=colors['dark_text'])
-    title_fill = PatternFill(start_color=colors['header_light'], 
-                            end_color=colors['header_light'], fill_type='solid')
+    title_fill = PatternFill(start_color=colors['header_light'], end_color=colors['header_light'], fill_type='solid')
     
     column_header_font = Font(name='Calibri', size=11, bold=True, color=colors['white'])
-    column_header_fill = PatternFill(start_color=colors['header_blue'], 
-                                     end_color=colors['header_blue'], fill_type='solid')
+    column_header_fill = PatternFill(start_color=colors['header_blue'], end_color=colors['header_blue'], fill_type='solid')
     column_header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     
-    # Data styles
     pass_font = Font(name='Calibri', size=10, color='065F46', bold=True)
-    pass_fill = PatternFill(start_color=colors['pass_green'], 
-                           end_color=colors['pass_green'], fill_type='solid')
+    pass_fill = PatternFill(start_color=colors['pass_green'], end_color=colors['pass_green'], fill_type='solid')
     
     fail_font = Font(name='Calibri', size=10, color='991B1B', bold=True)
-    fail_fill = PatternFill(start_color=colors['fail_red'], 
-                           end_color=colors['fail_red'], fill_type='solid')
+    fail_fill = PatternFill(start_color=colors['fail_red'], end_color=colors['fail_red'], fill_type='solid')
     
     cell_alignment = Alignment(horizontal='center', vertical='center')
     
@@ -352,17 +326,10 @@ def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str,
         bottom=Side(style='thin', color='D1D5DB')
     )
     
-    # ═══════════════════════════════════════════════════════════
-    # FORMAT EACH SHEET
-    # ═══════════════════════════════════════════════════════════
-    
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
         
-        # ─────────────────────────────────────────────────────────
-        # ADD COLLEGE HEADER (Rows 1-3)
-        # ─────────────────────────────────────────────────────────
-        
+        # College Header
         ws.merge_cells('A1:L1')
         ws['A1'] = college_name
         ws['A1'].font = college_font
@@ -389,13 +356,9 @@ def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str,
         ws['A4'].alignment = Alignment(horizontal='center', vertical='center')
         ws.row_dimensions[4].height = 16
         
-        # Empty row 5 for spacing
         ws.row_dimensions[5].height = 8
         
-        # ─────────────────────────────────────────────────────────
-        # FORMAT COLUMN HEADERS (Row 6)
-        # ─────────────────────────────────────────────────────────
-        
+        # Column Headers
         header_row = 6
         for cell in ws[header_row]:
             if cell.value:
@@ -406,10 +369,7 @@ def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str,
         
         ws.row_dimensions[header_row].height = 40
         
-        # ─────────────────────────────────────────────────────────
-        # AUTO-ADJUST COLUMN WIDTHS
-        # ─────────────────────────────────────────────────────────
-        
+        # Auto-adjust widths
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -421,33 +381,24 @@ def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str,
                 except:
                     pass
             
-            # Set width with min and max limits
             adjusted_width = min(max(max_length + 3, 12), 50)
             ws.column_dimensions[column_letter].width = adjusted_width
         
-        # ─────────────────────────────────────────────────────────
-        # FORMAT DATA ROWS (Starting from row 7)
-        # ─────────────────────────────────────────────────────────
-        
+        # Data rows
         for row_idx, row in enumerate(ws.iter_rows(min_row=7), start=7):
-            # Alternate row colors for readability
             if row_idx % 2 == 0:
-                row_fill = PatternFill(start_color=colors['light_gray'], 
-                                      end_color=colors['light_gray'], fill_type='solid')
+                row_fill = PatternFill(start_color=colors['light_gray'], end_color=colors['light_gray'], fill_type='solid')
             else:
-                row_fill = PatternFill(start_color=colors['white'], 
-                                      end_color=colors['white'], fill_type='solid')
+                row_fill = PatternFill(start_color=colors['white'], end_color=colors['white'], fill_type='solid')
             
             for cell in row:
                 if cell.value:
                     cell.alignment = cell_alignment
                     cell.border = thin_border
                     
-                    # Apply alternating row color only if not already colored
                     if not cell.fill or cell.fill.start_color.rgb == '00000000':
                         cell.fill = row_fill
                     
-                    # Highlight Pass/Fail
                     if isinstance(cell.value, str):
                         if 'PASS' in cell.value.upper() or '✓' in cell.value:
                             cell.font = pass_font
@@ -455,8 +406,6 @@ def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str,
                         elif 'FAIL' in cell.value.upper() or 'ARREAR' in cell.value.upper() or '✗' in cell.value:
                             cell.font = fail_font
                             cell.fill = fail_fill
-                        
-                        # Highlight performance categories
                         elif 'EXCELLENT' in cell.value.upper():
                             cell.fill = PatternFill(start_color='D1FAE5', end_color='D1FAE5', fill_type='solid')
                             cell.font = Font(bold=True, color='065F46')
@@ -466,46 +415,197 @@ def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str,
                         elif 'AVERAGE' in cell.value.upper():
                             cell.fill = PatternFill(start_color='FEF3C7', end_color='FEF3C7', fill_type='solid')
                             cell.font = Font(bold=True, color='92400E')
-                        elif 'NEEDS IMPROVEMENT' in cell.value.upper() or 'POOR' in cell.value.upper():
+                        elif 'NEEDS IMPROVEMENT' in cell.value.upper():
                             cell.fill = PatternFill(start_color='FEE2E2', end_color='FEE2E2', fill_type='solid')
                             cell.font = Font(bold=True, color='991B1B')
         
-        # ─────────────────────────────────────────────────────────
-        # FREEZE TOP ROWS
-        # ─────────────────────────────────────────────────────────
-        
-        ws.freeze_panes = 'A7'  # Freeze header rows
-        
-        # ─────────────────────────────────────────────────────────
-        # ADD CHARTS FOR ANALYSIS SHEETS
-        # ─────────────────────────────────────────────────────────
-        
-        if sheet_name == 'Subject Analysis' and len(ws['A']) > 7:
-            # Create bar chart for pass percentages
-            chart = BarChart()
-            chart.title = "Subject-wise Pass Percentage"
-            chart.y_axis.title = "Pass Percentage (%)"
-            chart.x_axis.title = "Subjects"
-            
-            # Data for chart (assuming Pass % is in column G)
-            data = Reference(ws, min_col=7, min_row=6, max_row=ws.max_row)
-            cats = Reference(ws, min_col=1, min_row=7, max_row=ws.max_row)
-            
-            chart.add_data(data, titles_from_data=True)
-            chart.set_categories(cats)
-            chart.height = 12
-            chart.width = 20
-            
-            ws.add_chart(chart, f"A{ws.max_row + 3}")
+        ws.freeze_panes = 'A7'
     
     wb.save(excel_path)
-    print("✨ Gorgeous formatting applied!")
 
 
-# ═══════════════════════════════════════════════════════════
-# TEST FUNCTION
-# ═══════════════════════════════════════════════════════════
+def add_comprehensive_charts(excel_path: str, df: pd.DataFrame, 
+                             subject_stats_df: pd.DataFrame, 
+                             faculty_stats_df: pd.DataFrame):
+    """Add beautiful charts to analysis sheets"""
+    
+    wb = load_workbook(excel_path)
+    
+    # ═══════════════════════════════════════════════════════════
+    # CHART 1: Subject-wise Pass Percentage (Bar Chart)
+    # ═══════════════════════════════════════════════════════════
+    
+    if 'Subject Analysis' in wb.sheetnames:
+        ws = wb['Subject Analysis']
+        
+        # Find data range
+        max_row = ws.max_row
+        
+        # Bar chart for pass percentage
+        chart1 = BarChart()
+        chart1.title = "Subject-wise Pass Percentage"
+        chart1.y_axis.title = "Pass Percentage (%)"
+        chart1.x_axis.title = "Subjects"
+        chart1.height = 12
+        chart1.width = 20
+        
+        # Data (Pass % is column G, row 7)
+        data = Reference(ws, min_col=7, min_row=6, max_row=max_row)
+        cats = Reference(ws, min_col=2, min_row=7, max_row=max_row)  # Subject Name
+        
+        chart1.add_data(data, titles_from_data=True)
+        chart1.set_categories(cats)
+        
+        ws.add_chart(chart1, f"A{max_row + 3}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # CHART 2: Pass/Fail Distribution (Pie Chart)
+        # ═══════════════════════════════════════════════════════════
+        
+        # Add summary data for pie chart
+        pie_row = max_row + 20
+        ws[f"N{pie_row}"] = "Result"
+        ws[f"O{pie_row}"] = "Count"
+        ws[f"N{pie_row+1}"] = "Passed"
+        ws[f"O{pie_row+1}"] = f"=SUM(E7:E{max_row})"
+        ws[f"N{pie_row+2}"] = "Failed"
+        ws[f"O{pie_row+2}"] = f"=SUM(F7:F{max_row})"
+        
+        chart2 = PieChart()
+        chart2.title = "Overall Pass/Fail Distribution"
+        chart2.height = 10
+        chart2.width = 12
+        
+        data2 = Reference(ws, min_col=15, min_row=pie_row, max_row=pie_row+2)
+        labels = Reference(ws, min_col=14, min_row=pie_row+1, max_row=pie_row+2)
+        
+        chart2.add_data(data2, titles_from_data=True)
+        chart2.set_categories(labels)
+        
+        ws.add_chart(chart2, f"N{max_row + 3}")
+    
+    # ═══════════════════════════════════════════════════════════
+    # CHART 3: Faculty Performance (Bar Chart)
+    # ═══════════════════════════════════════════════════════════
+    
+    if 'Faculty Analysis' in wb.sheetnames:
+        ws = wb['Faculty Analysis']
+        max_row = ws.max_row
+        
+        chart3 = BarChart()
+        chart3.title = "Faculty-wise Pass Percentage"
+        chart3.y_axis.title = "Pass Percentage (%)"
+        chart3.x_axis.title = "Faculty"
+        chart3.height = 12
+        chart3.width = 20
+        
+        # Pass % is column F
+        data3 = Reference(ws, min_col=6, min_row=6, max_row=max_row)
+        cats3 = Reference(ws, min_col=1, min_row=7, max_row=max_row)
+        
+        chart3.add_data(data3, titles_from_data=True)
+        chart3.set_categories(cats3)
+        
+        ws.add_chart(chart3, f"A{max_row + 3}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # CHART 4: Internal vs External Marks Comparison (Line Chart)
+        # ═══════════════════════════════════════════════════════════
+        
+        chart4 = LineChart()
+        chart4.title = "Average Internal vs External Marks by Faculty"
+        chart4.y_axis.title = "Marks"
+        chart4.x_axis.title = "Faculty"
+        chart4.height = 10
+        chart4.width = 16
+        
+        # Internal marks (column G), External marks (column H)
+        internal_data = Reference(ws, min_col=7, min_row=6, max_row=max_row)
+        external_data = Reference(ws, min_col=8, min_row=6, max_row=max_row)
+        cats4 = Reference(ws, min_col=1, min_row=7, max_row=max_row)
+        
+        chart4.add_data(internal_data, titles_from_data=True)
+        chart4.add_data(external_data, titles_from_data=True)
+        chart4.set_categories(cats4)
+        
+        ws.add_chart(chart4, f"N{max_row + 3}")
+    
+    # ═══════════════════════════════════════════════════════════
+    # CHART 5: Grade Distribution (Bar Chart)
+    # ═══════════════════════════════════════════════════════════
+    
+    if 'Overall Summary' in wb.sheetnames:
+        ws = wb['Overall Summary']
+        
+        # Calculate grade distribution
+        grade_counts = df['Grade'].value_counts().sort_index()
+        
+        # Add grade distribution table
+        grade_row = 20
+        ws[f"A{grade_row}"] = "Grade"
+        ws[f"B{grade_row}"] = "Count"
+        
+        current_row = grade_row + 1
+        for grade, count in grade_counts.items():
+            ws[f"A{current_row}"] = grade
+            ws[f"B{current_row}"] = count
+            current_row += 1
+        
+        chart5 = BarChart()
+        chart5.title = "Grade Distribution"
+        chart5.y_axis.title = "Number of Students"
+        chart5.x_axis.title = "Grade"
+        chart5.height = 10
+        chart5.width = 14
+        
+        data5 = Reference(ws, min_col=2, min_row=grade_row, max_row=current_row-1)
+        cats5 = Reference(ws, min_col=1, min_row=grade_row+1, max_row=current_row-1)
+        
+        chart5.add_data(data5, titles_from_data=True)
+        chart5.set_categories(cats5)
+        
+        ws.add_chart(chart5, f"E{grade_row}")
+    
+    # ═══════════════════════════════════════════════════════════
+    # CHART 6: Department-wise Performance (Pie Chart)
+    # ═══════════════════════════════════════════════════════════
+    
+    if 'Overall Summary' in wb.sheetnames:
+        ws = wb['Overall Summary']
+        
+        # Calculate department statistics
+        dept_stats = df.groupby('Department').agg({
+            'Result': lambda x: (x == 'Pass').sum() / len(x) * 100
+        }).round(2)
+        
+        # Add department table
+        dept_row = 35
+        ws[f"A{dept_row}"] = "Department"
+        ws[f"B{dept_row}"] = "Pass %"
+        
+        current_row = dept_row + 1
+        for dept, row_data in dept_stats.iterrows():
+            ws[f"A{current_row}"] = dept
+            ws[f"B{current_row}"] = row_data['Result']
+            current_row += 1
+        
+        chart6 = PieChart()
+        chart6.title = "Department-wise Pass Percentage"
+        chart6.height = 10
+        chart6.width = 12
+        
+        data6 = Reference(ws, min_col=2, min_row=dept_row, max_row=current_row-1)
+        cats6 = Reference(ws, min_col=1, min_row=dept_row+1, max_row=current_row-1)
+        
+        chart6.add_data(data6, titles_from_data=True)
+        chart6.set_categories(cats6)
+        
+        ws.add_chart(chart6, f"E{dept_row}")
+    
+    wb.save(excel_path)
+    print("📈 6 interactive charts added successfully!")
+
 
 if __name__ == "__main__":
-    print("Excel Generator V2 - Beautiful Edition")
-    print("This module generates professional, color-coded Excel reports")
+    print("Excel Generator V2 - Beautiful Edition with Charts")
+    print("Generates professional Excel reports with 6 interactive visualizations")
