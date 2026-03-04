@@ -90,10 +90,9 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
       const form = new FormData();
       form.append("pdf_file", pdfFile);
 
-      const res  = await fetch("http://127.0.0.1:8000/upload", {
+      const res = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
+        body: form,  // ← No more Authorization header!
       });
       const data = await res.json();
       const ms   = Date.now() - startTimeRef.current;
@@ -121,9 +120,7 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
   };
 
   const handleDownload = () => {
-    fetch(`http://127.0.0.1:8000/download/${sessionId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch(`http://127.0.0.1:8000/download/${sessionId}`)
       .then(r => r.blob())
       .then(blob => {
         const url = URL.createObjectURL(blob);
