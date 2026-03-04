@@ -11,20 +11,25 @@ def merge_results(
 ) -> Tuple[List[MergedRecord], Dict]:
     """
     Merge internal and external records.
-    
-    Args:
-        internal_records: List of InternalRecord from college
-        external_records: List of ExternalRecord from KTU PDF
-        name_mapping: Dict of regno -> student_name
-    
-    Returns:
-        (List of MergedRecord, merge statistics)
+    ONLY processes students who appear in internal records (same department).
     """
     
     merged = []
     
-    # Create lookup dictionaries for faster access
-    # Key: (register_no, subject_code) -> record
+    # Get all register numbers from internal records (CSE students)
+    internal_students = set(r.register_no for r in internal_records)
+    
+    print(f"   🎯 Filtering for {len(internal_students)} students from internal marks")
+    
+    # Filter external records to ONLY include students from internal
+    external_records_filtered = [
+        r for r in external_records 
+        if r.register_no in internal_students
+    ]
+    
+    print(f"   ✂️  Filtered external records: {len(external_records)} → {len(external_records_filtered)}")
+    
+    # Create lookup dictionaries
     internal_lookup = {
         (r.register_no, r.subject_code): r 
         for r in internal_records
@@ -32,7 +37,7 @@ def merge_results(
     
     external_lookup = {
         (r.register_no, r.subject_code): r 
-        for r in external_records
+        for r in external_records_filtered  # Use filtered records
     }
     
     # Get all unique combinations
@@ -69,37 +74,32 @@ def merge_results(
             internal_mark = internal_rec.internal_mark
             external_mark = external_rec.external_mark
             grade = external_rec.grade
-            
             stats['both'] += 1
             
-        # Case 2: Only internal exists (student didn't appear for exam?)
+        # Case 2: Only internal exists (student didn't appear for exam)
         elif internal_rec and not external_rec:
             internal_mark = internal_rec.internal_mark
             external_mark = 0
-            grade = "N/A"
-            
+            grade = "Absent"
             stats['internal_only'] += 1
             
-        # Case 3: Only external exists (shouldn't happen, but handle it)
+        # Case 3: Only external exists (shouldn't happen after filtering)
         elif external_rec and not internal_rec:
             internal_mark = 0
             external_mark = external_rec.external_mark
             grade = external_rec.grade
-            
             stats['external_only'] += 1
             
         else:
-            continue  # Skip if neither exists
+            continue
         
         # Calculate total and result
         total_mark = internal_mark + external_mark
         
-        # Determine pass/fail (typically need 40% overall and 35% in external)
-        # External passing mark: 17.5 out of 50
-        # Total passing mark: 40 out of 100
+        # Pass/Fail logic: Need 40+ total AND 17.5+ external
         external_pass = external_mark >= 17.5
         total_pass = total_mark >= 40
-        result = "Pass" if (external_pass and total_pass) else "Fail"
+        result = "Pass" if (external_pass and total_pass and grade not in ["F", "FE", "Absent"]) else "Fail"
         
         # Get subject and faculty info from internal record
         subject_name = internal_rec.subject_name if internal_rec else subj_code
@@ -129,8 +129,8 @@ def merge_results(
     stats['unique_students'] = len(stats['students_processed'])
     stats['unique_subjects'] = len(stats['subjects_processed'])
     
-    # Convert sets to lists for JSON serialization
-    stats['students_processed'] = sorted(list(stats['students_processed']))[:10]  # Sample
+    # Convert sets to lists for JSON
+    stats['students_processed'] = sorted(list(stats['students_processed']))[:10]
     stats['subjects_processed'] = sorted(list(stats['subjects_processed']))
     
     return merged, stats
@@ -140,12 +140,12 @@ def get_department_from_regno(regno: str) -> str:
     """Extract department from register number"""
     regno = regno.upper()
     
+    if "CS" in regno:
+        return "CSE"
     if "EE" in regno and "EEE" not in regno:
         return "EEE"
     if "EC" in regno:
         return "ECE"
-    if "CS" in regno:
-        return "CSE"
     if "ME" in regno:
         return "ME"
     if "CE" in regno and "ECE" not in regno:
