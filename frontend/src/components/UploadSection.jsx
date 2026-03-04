@@ -31,9 +31,12 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
   const [activeStep, setActiveStep]     = useState(-1);
   const [doneSteps, setDoneSteps]       = useState([]);
   const [elapsed, setElapsed]           = useState(null);
+  const [showExtraSheet, setShowExtraSheet] = useState(false);
+  const [excelFile, setExcelFile]           = useState(null);
 
   const sectionRef    = useRef(null);
   const dropzoneRef   = useRef(null);
+  const fileInputRef  = useRef(null);
   const timerRef      = useRef(null);
   const startTimeRef  = useRef(null);
 
@@ -89,6 +92,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     try {
       const form = new FormData();
       form.append("pdf_file", pdfFile);
+      if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
       const res = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
@@ -141,6 +145,9 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     setDoneSteps([]);
     setElapsed(null);
     setSessionId(null);
+    setShowExtraSheet(false);
+    setExcelFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const getStepStatus = (i) => {
@@ -193,6 +200,8 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onDrop={onDrop}
+              onClick={() => !isUploading && fileInputRef.current?.click()}
+              style={{ cursor: isUploading ? "not-allowed" : "pointer" }}
             >
               {/* corner brackets */}
               <span className="corner corner-tl" />
@@ -204,6 +213,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                 type="file"
                 accept=".pdf"
                 className="upload-input-hidden"
+                ref={fileInputRef}
                 onChange={handleFileChange}
               />
 
@@ -275,6 +285,70 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                 </div>
               </div>
             )}
+
+            {/* ── EXTRA SHEET TOGGLE ── */}
+            <div className="extra-sheet-toggle-wrap" style={{ marginTop: "1rem" }}>
+              <button
+                className={`extra-sheet-toggle ${showExtraSheet ? "active" : ""}`}
+                onClick={() => { setShowExtraSheet(v => !v); if (showExtraSheet) setExcelFile(null); }}
+                type="button"
+              >
+                <div className="extra-toggle-left">
+                  <div className="extra-toggle-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <path d="M3 9h18M9 21V9"/>
+                    </svg>
+                  </div>
+                  <div className="extra-toggle-body">
+                    <span className="extra-toggle-label">Attach student details sheet</span>
+                    <span className="extra-toggle-sub">Optional · Adds internal marks to output for merged Excel</span>
+                  </div>
+                </div>
+                <div className={`extra-toggle-switch ${showExtraSheet ? "on" : ""}`}>
+                  <div className="toggle-thumb" />
+                </div>
+              </button>
+
+              {showExtraSheet && (
+                <div className="extra-sheet-picker">
+                  <label className="extra-sheet-dropzone">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      style={{ display: "none" }}
+                      onChange={e => setExcelFile(e.target.files?.[0] || null)}
+                    />
+                    {excelFile ? (
+                      <div className="extra-file-selected">
+                        <div className="extra-file-icon">PDF</div>
+                        <div className="extra-file-info">
+                          <div className="extra-file-name">{excelFile.name}</div>
+                          <div className="extra-file-meta">{formatBytes(excelFile.size)} · internal marks PDF</div>
+                        </div>
+                        <div className="extra-file-check">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="extra-dropzone-empty">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                          <polyline points="17 8 12 3 7 8"/>
+                          <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <span>Click to browse <strong>internal marks .pdf</strong></span>
+                      </div>
+                    )}
+                  </label>
+                  <p className="extra-sheet-hint">
+                    Internal marks PDF from your college portal
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Process button */}
             <button

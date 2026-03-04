@@ -54,72 +54,85 @@ async def upload_result(
     external_pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}_external.pdf")
     
     # Save external PDF
-    with open(external_pdf_path, "wb") as f:
+    external_filename = f"result_{session_id}.pdf"
+    external_path = os.path.join(UPLOAD_DIR, external_filename)
+    
+    with open(external_path, "wb") as f:
         shutil.copyfileobj(pdf_file.file, f)
-    await pdf_file.close()
-
-    try:
-        print(f"📄 Parsing external PDF: {pdf_file.filename}")
-        external_students = parse_ktu_results(external_pdf_path)
+    
+    print(f"📄 Parsing external PDF: {external_filename}")
+    external_students = parse_ktu_results(external_path)
+    
+    # Calculate pass/fail statistics
+    student_results = {}
+    for record in external_students:
+        regno = record.register_no
+        if regno not in student_results:
+            student_results[regno] = {"passed": True}
         
-        excel_path = os.path.join(OUTPUT_DIR, f"{session_id}_results.xlsx")
+        if record.grade in ["F", "FE", "Absent", "Withheld"]:
+            student_results[regno]["passed"] = False
+    
+    total_students = len(student_results)
+    passed_students = sum(1 for s in student_results.values() if s["passed"])
+    
+    # TWO MODES: Internal + External OR External only
+    if internal_file:
+        print(f"📄 Parsing internal PDF...")
         
-        # CASE 1: External only (simple format)
-        if internal_file is None:
-            print("📊 Generating simple Excel...")
-            generate_excel_report(external_students, excel_path)
-            
-            return {
-                "message": f"Processed {len(external_students)} students",
-                "session_id": session_id,
-                "total_students": len(external_students),
-                "passed_students": sum(1 for s in external_students if s.get("status") == "Pass"),
-                "has_internal_marks": False
-            }
+        # Save internal PDF
+        internal_filename = f"internal_{session_id}.pdf"
+        internal_path = os.path.join(UPLOAD_DIR, internal_filename)
         
-        # CASE 2: Both PDFs (beautiful format)
-        else:
-            print(f"📄 Parsing internal PDF: {internal_file.filename}")
-            internal_pdf_path = os.path.join(UPLOAD_DIR, f"{session_id}_internal.pdf")
-            
-            with open(internal_pdf_path, "wb") as f:
-                shutil.copyfileobj(internal_file.file, f)
-            await internal_file.close()
-            
-            # Parse and merge
-            internal_records, name_mapping = parse_internal_marks(internal_pdf_path)
-            
-            external_records = []
-            for student in external_students:
-                for subject_code, grade in student["subjects"].items():
-                    external_records.append(ExternalRecord(
-                        register_no=student["register_no"],
-                        subject_code=subject_code,
-                        grade=grade,
-                        external_mark=grade_to_marks(grade)
-                    ))
-            
-            print("🔄 Merging data...")
-            merged_records, merge_stats = merge_results(
-                internal_records, external_records, name_mapping
-            )
-            
-            print("✨ Generating beautiful Excel...")
-            generate_merged_excel(merged_records, excel_path)
-            
-            return {
-                "message": f"Processed {merge_stats['unique_students']} students with internal marks",
-                "session_id": session_id,
-                "total_students": merge_stats['unique_students'],
-                "passed_students": sum(1 for r in merged_records if r.result == "Pass"),
-                "has_internal_marks": True,
-                "merge_stats": merge_stats
-            }
+        with open(internal_path, "wb") as f:
+            shutil.copyfileobj(internal_file.file, f)
         
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        # Parse internal marks - RETURNS TUPLE!
+        internal_students, name_mapping = parse_internal_marks(internal_path)
+        
+        print(f"🔗 Merging internal + external data...")
+        print(f"   📊 Internal: {len(internal_students)} records")
+        print(f"   📊 External: {len(external_students)} records")
+        print(f"   👥 Names: {len(name_mapping)} students")
+        
+        # Merge data - NEEDS 3 ARGUMENTS!
+        merged_students, merge_stats = merge_results(
+            internal_students, 
+            external_students,
+            name_mapping
+        )
+        
+        print(f"   ✅ Merged: {merge_stats['total_merged']} records")
+        
+        # Generate BEAUTIFUL Excel with charts
+        excel_filename = f"{session_id}_results.xlsx"
+        excel_path = os.path.join(OUTPUT_DIR, excel_filename)
+        
+        print(f"📊 Generating beautiful Excel with charts...")
+        generate_merged_excel(merged_students, excel_path)
+        
+        has_internal = True
+        
+    else:
+        # Generate SIMPLE Excel (external only)
+        excel_filename = f"{session_id}_results.xlsx"
+        excel_path = os.path.join(OUTPUT_DIR, excel_filename)
+        
+        print(f"📊 Generating simple Excel...")
+        generate_excel_report(external_students, excel_path)
+        
+        has_internal = False
+    
+    print(f"✅ Processing complete! Session: {session_id}")
+    
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "message": "Files processed successfully",
+        "total_students": total_students,
+        "passed_students": passed_students,
+        "has_internal_marks": has_internal
+    }
 
 
 @app.get("/download/{session_id}")
