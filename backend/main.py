@@ -115,14 +115,12 @@ async def upload_result(
     external_students = parse_ktu_results(external_path)
     
     # Calculate pass/fail statistics
-    # For ExternalRecord objects, we need to group by student first
     student_results = {}
     for record in external_students:
         regno = record.register_no
         if regno not in student_results:
             student_results[regno] = {"passed": True}
         
-        # If any subject is F/FE/Absent/Withheld, mark student as failed
         if record.grade in ["F", "FE", "Absent", "Withheld"]:
             student_results[regno]["passed"] = False
     
@@ -140,12 +138,22 @@ async def upload_result(
         with open(internal_path, "wb") as f:
             shutil.copyfileobj(internal_file.file, f)
         
-        # Parse internal marks
-        internal_students = parse_internal_marks(internal_path)
+        # Parse internal marks - RETURNS TUPLE!
+        internal_students, name_mapping = parse_internal_marks(internal_path)
         
-        # Merge data
         print(f"🔗 Merging internal + external data...")
-        merged_students = merge_results(internal_students, external_students)
+        print(f"   📊 Internal: {len(internal_students)} records")
+        print(f"   📊 External: {len(external_students)} records")
+        print(f"   👥 Names: {len(name_mapping)} students")
+        
+        # Merge data - NEEDS 3 ARGUMENTS!
+        merged_students, merge_stats = merge_results(
+            internal_students, 
+            external_students,
+            name_mapping
+        )
+        
+        print(f"   ✅ Merged: {merge_stats['total_merged']} records")
         
         # Generate BEAUTIFUL Excel with charts
         excel_filename = f"{session_id}_results.xlsx"
@@ -176,6 +184,7 @@ async def upload_result(
         "passed_students": passed_students,
         "has_internal_marks": has_internal
     }
+
 
 @app.get("/download/{session_id}")
 def download_excel(session_id: str, current_user: str = Depends(get_current_user)):

@@ -369,20 +369,18 @@ def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str,
         
         ws.row_dimensions[header_row].height = 40
         
-        # Auto-adjust widths
-        for column in ws.columns:
-            max_length = 0
-            column_letter = column[0].column_letter
-            
-            for cell in column:
-                try:
-                    if cell.value and len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            
-            adjusted_width = min(max(max_length + 3, 12), 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
+        # Set fixed column widths (safer than auto-calculation)
+        column_widths = {
+            'A': 18, 'B': 25, 'C': 15, 'D': 30, 'E': 25, 'F': 12,
+            'G': 12, 'H': 12, 'I': 10, 'J': 12, 'K': 15, 'L': 15
+        }
+        
+        for col_letter, width in column_widths.items():
+            ws.column_dimensions[col_letter].width = width
+        
+        # Set remaining columns to default
+        for col_idx in range(13, 30):  # Up to column AD
+            ws.column_dimensions[get_column_letter(col_idx)].width = 15
         
         # Data rows
         for row_idx, row in enumerate(ws.iter_rows(min_row=7), start=7):
@@ -422,7 +420,6 @@ def apply_gorgeous_formatting(excel_path: str, college_name: str, location: str,
         ws.freeze_panes = 'A7'
     
     wb.save(excel_path)
-
 
 def add_comprehensive_charts(excel_path: str, df: pd.DataFrame, 
                              subject_stats_df: pd.DataFrame, 
