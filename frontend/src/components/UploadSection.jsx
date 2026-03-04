@@ -92,7 +92,7 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
     try {
       const form = new FormData();
       form.append("pdf_file", pdfFile);
-      if (showExtraSheet && excelFile) form.append("student_details", excelFile);
+      if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
       const res  = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
@@ -204,6 +204,8 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onDrop={onDrop}
+              onClick={() => !isUploading && fileInputRef.current?.click()}
+              style={{ cursor: isUploading ? "not-allowed" : "pointer" }}
             >
               {/* corner brackets */}
               <span className="corner corner-tl" />
@@ -304,7 +306,7 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
                   </div>
                   <div className="extra-toggle-body">
                     <span className="extra-toggle-label">Attach student details sheet</span>
-                    <span className="extra-toggle-sub">Optional · Adds name, reg no & branch to output</span>
+                    <span className="extra-toggle-sub">Optional · Adds internal marks to output for merged Excel</span>
                   </div>
                 </div>
                 <div className={`extra-toggle-switch ${showExtraSheet ? "on" : ""}`}>
@@ -323,10 +325,10 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
                     />
                     {excelFile ? (
                       <div className="extra-file-selected">
-                        <div className="extra-file-icon">XLS</div>
+                        <div className="extra-file-icon">PDF</div>
                         <div className="extra-file-info">
                           <div className="extra-file-name">{excelFile.name}</div>
-                          <div className="extra-file-meta">{formatBytes(excelFile.size)} · spreadsheet</div>
+                          <div className="extra-file-meta">{formatBytes(excelFile.size)} · internal marks PDF</div>
                         </div>
                         <div className="extra-file-check">
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -341,12 +343,12 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
                           <polyline points="17 8 12 3 7 8"/>
                           <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
-                        <span>Click to browse <strong>.xlsx / .csv</strong></span>
+                        <span>Click to browse <strong>internal marks .pdf</strong></span>
                       </div>
                     )}
                   </label>
                   <p className="extra-sheet-hint">
-                    Expected columns: <code>Name</code>, <code>Reg No</code>, <code>Branch</code>
+                    Internal marks PDF from your college portal
                   </p>
                 </div>
               )}
