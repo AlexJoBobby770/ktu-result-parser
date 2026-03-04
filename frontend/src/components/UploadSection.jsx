@@ -21,7 +21,7 @@ function formatBytes(bytes) {
   return `${(bytes / 1048576).toFixed(2)} MB`;
 }
 
-const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref) {
+const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
   const [pdfFile, setPdfFile]           = useState(null);
   const [dragOver, setDragOver]         = useState(false);
   const [isUploading, setIsUploading]   = useState(false);
@@ -92,13 +92,12 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
 
       const res = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
-        body: form,  // ← No more Authorization header!
+        body: form,  // No headers!
       });
       const data = await res.json();
       const ms   = Date.now() - startTimeRef.current;
 
       if (!res.ok) {
-        if (res.status === 401) { onLogout(); return; }
         setUploadStatus({ message: data.detail || "Processing failed. Please retry.", type: "error" });
         setActiveStep(-1);
         return;
