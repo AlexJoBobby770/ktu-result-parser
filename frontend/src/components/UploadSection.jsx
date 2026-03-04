@@ -317,7 +317,7 @@ const UploadSection = forwardRef(function UploadSection({ token, onLogout }, ref
                   <label className="extra-sheet-dropzone">
                     <input
                       type="file"
-                      accept=".xlsx,.xls,.csv"
+                      accept=".pdf"
                       style={{ display: "none" }}
                       onChange={e => setExcelFile(e.target.files?.[0] || null)}
                     />
