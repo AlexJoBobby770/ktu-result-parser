@@ -31,7 +31,7 @@ const TICKER = [
   {  label: "Encryption",           val: "AES-256" },
   {  label: "Formats Supported",    val: "KTU PDF" },
   {  label: "Output Format",        val: "XLSX / Excel" },
-  {  label: "Auth Protocol",        val: "JWT Bearer" },
+  {  label: "Auth Protocol",        val: "Firebase" },
   {  label: "Data Retention",       val: "Zero" },
   { icon: "🚀", label: "Pipeline Stages",      val: "5-Step" },
 ];
