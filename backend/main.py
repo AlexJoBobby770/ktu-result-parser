@@ -15,7 +15,7 @@ from excel_generator import generate_excel_report
 from excel_generator_v2 import generate_merged_excel
 from internal_parser import parse_internal_marks
 from data_merger import merge_results
-from models import ExternalRecord, grade_to_marks
+from models import ExternalRecord
 
 app = FastAPI(title="KTU Result Processor API")
 
