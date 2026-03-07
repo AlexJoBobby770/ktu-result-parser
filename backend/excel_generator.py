@@ -1,278 +1,324 @@
 # backend/excel_generator.py
+import re
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from collections import defaultdict
 from datetime import datetime
-from models import (
-    PASSING_GRADES, FAIL_GRADES, GRADE_POINTS,
-    compute_sgpa, get_credits, get_status
-)
+from models import PASSING_GRADES, compute_sgpa
 
 COLLEGE_NAME     = "ALBERTIAN INSTITUTE OF SCIENCE AND TECHNOLOGY (AISAT)"
 COLLEGE_LOCATION = "Kalamassery, Ernakulam, Kerala"
 
-# ── colour palette ────────────────────────────────────────────────────────────
 C = {
-    "dark_blue":  "1E3A8A",
-    "mid_blue":   "3B82F6",
-    "pass_bg":    "D1FAE5",
-    "pass_fg":    "065F46",
-    "fail_bg":    "FEE2E2",
-    "fail_fg":    "991B1B",
-    "white":      "FFFFFF",
-    "light_gray": "F3F4F6",
-    "dark_text":  "1F2937",
-    "skip_bg":    "F3F4F6",   # greyed out = elective not chosen
+    "dark_blue":  "1E3A8A", "mid_blue":  "3B82F6",
+    "pass_bg":    "D1FAE5", "pass_fg":   "065F46",
+    "fail_bg":    "FEE2E2", "fail_fg":   "991B1B",
+    "white":      "FFFFFF", "light_gray":"F3F4F6",
+    "dark_text":  "1F2937", "skip_bg":   "F3F4F6",
     "skip_fg":    "9CA3AF",
 }
-
 THIN = Border(
-    left=Side(style="thin", color="D1D5DB"),
-    right=Side(style="thin", color="D1D5DB"),
-    top=Side(style="thin", color="D1D5DB"),
-    bottom=Side(style="thin", color="D1D5DB"),
+    left=Side(style="thin", color="D1D5DB"), right=Side(style="thin", color="D1D5DB"),
+    top=Side(style="thin",  color="D1D5DB"), bottom=Side(style="thin",color="D1D5DB"),
 )
+PERF_COLORS = {
+    "Excellent":         ("D1FAE5", "065F46"),
+    "Good":              ("DBEAFE", "1E40AF"),
+    "Average":           ("FEF3C7", "92400E"),
+    "Needs Improvement": ("FEE2E2", "991B1B"),
+}
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── micro helpers ─────────────────────────────────────────────────────────────
 
-def _fill(hex_color):
-    return PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
+def _fill(h):
+    return PatternFill(start_color=h, end_color=h, fill_type="solid")
 
-def _font(color=C["dark_text"], bold=False, size=10, italic=False):
-    return Font(name="Calibri", size=size, bold=bold, color=color, italic=italic)
+def _font(color=C["dark_text"], bold=False, size=10):
+    return Font(name="Calibri", size=size, bold=bold, color=color)
+
+def _batch_year(usn: str) -> str:
+    m = re.match(r'[A-Z]+(\d{2})', usn)
+    return m.group(1) if m else ""
+
+def _filter_batch(records, batch_year: str, field="usn"):
+    if not batch_year:
+        return records
+    return [r for r in records if _batch_year(getattr(r, field)) == batch_year]
 
 
-def _write_sheet_header(ws, title: str, num_cols: int):
-    """Write the 5-row college header block at the top of every sheet."""
-    col_letter = get_column_letter(num_cols)
+# ── sheet header & formatting helpers ────────────────────────────────────────
 
-    rows = [
-        (COLLEGE_NAME,    16, True,  C["dark_blue"],  C["white"]),
-        (COLLEGE_LOCATION, 11, False, C["dark_text"],  None),
-        (title,           12, True,  C["dark_text"],  C["mid_blue"]),
-        (f"Generated: {datetime.now().strftime('%d %B %Y  %I:%M %p')}", 9, False, "6B7280", None),
+def _write_header(ws, title: str, ncols: int):
+    cl = get_column_letter(ncols)
+    meta = [
+        (COLLEGE_NAME,     16, True,  C["white"],    C["dark_blue"]),
+        (COLLEGE_LOCATION, 11, False, C["dark_text"],None),
+        (title,            12, True,  C["dark_text"],C["mid_blue"]),
+        (f"Generated: {datetime.now().strftime('%d %B %Y  %I:%M %p')}",
+                            9, False, "6B7280",      None),
     ]
-
-    for row_idx, (text, size, bold, fg, bg) in enumerate(rows, start=1):
-        ws.merge_cells(f"A{row_idx}:{col_letter}{row_idx}")
-        cell = ws[f"A{row_idx}"]
-        cell.value = text
-        cell.font = Font(name="Calibri", size=size, bold=bold, color=fg)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        if bg:
-            cell.fill = _fill(bg)
-        ws.row_dimensions[row_idx].height = 22 if row_idx < 4 else 16
-
-    ws.row_dimensions[5].height = 6   # blank spacer row
+    for i, (txt, sz, bold, fg, bg) in enumerate(meta, 1):
+        ws.merge_cells(f"A{i}:{cl}{i}")
+        c = ws[f"A{i}"]
+        c.value = txt
+        c.font  = Font(name="Calibri", size=sz, bold=bold, color=fg)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        if bg: c.fill = _fill(bg)
+        ws.row_dimensions[i].height = 22 if i < 4 else 16
+    ws.row_dimensions[5].height = 6
 
 
-def _format_header_row(ws, row=6):
-    """Style the column header row (row 6)."""
-    ws.row_dimensions[row].height = 32
+def _fmt_col_headers(ws, row=6):
+    ws.row_dimensions[row].height = 34
     for col in range(1, ws.max_column + 1):
-        cell = ws.cell(row=row, column=col)
-        if cell.value is not None:
-            cell.font = Font(name="Calibri", size=10, bold=True, color=C["white"])
-            cell.fill = _fill(C["dark_blue"])
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.border = THIN
+        c = ws.cell(row=row, column=col)
+        if c.value is not None:
+            c.font      = Font(name="Calibri", size=10, bold=True, color=C["white"])
+            c.fill      = _fill(C["dark_blue"])
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border    = THIN
 
 
-def _format_data_rows(ws, start_row=7):
-    """Apply alternating rows and grade-based colouring to data."""
-    for row_idx in range(start_row, ws.max_row + 1):
-        alt_fill = _fill(C["light_gray"] if row_idx % 2 == 0 else C["white"])
-
-        for col_idx in range(1, ws.max_column + 1):
-            cell = ws.cell(row=row_idx, column=col_idx)
-            if cell.value is None:
-                continue
-
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = THIN
-
-            v = str(cell.value).strip()
-
-            if v == "—":
-                cell.font = _font(C["skip_fg"])
-                cell.fill = _fill(C["skip_bg"])
-            elif "✓" in v:
-                cell.font = _font(C["pass_fg"], bold=True)
-                cell.fill = _fill(C["pass_bg"])
-            elif "✗" in v:
-                cell.font = _font(C["fail_fg"], bold=True)
-                cell.fill = _fill(C["fail_bg"])
-            elif v in {"F", "FE", "Absent", "Withheld"}:
-                cell.font = _font(C["fail_fg"], bold=True)
-                cell.fill = _fill(C["fail_bg"])
-            elif v in PASSING_GRADES:
-                cell.font = _font(C["pass_fg"])
-                cell.fill = _fill(C["pass_bg"])
-            else:
-                cell.font = _font()
-                cell.fill = alt_fill
-
+def _fmt_result_data(ws, start=7):
+    for r in range(start, ws.max_row + 1):
+        alt = _fill(C["light_gray"] if r % 2 == 0 else C["white"])
+        for col in range(1, ws.max_column + 1):
+            c = ws.cell(row=r, column=col)
+            if c.value is None: continue
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border    = THIN
+            v = str(c.value).strip()
+            if   v == "—":                     c.font, c.fill = _font(C["skip_fg"]),       _fill(C["skip_bg"])
+            elif "✓" in v:                     c.font, c.fill = _font(C["pass_fg"],True),  _fill(C["pass_bg"])
+            elif "✗" in v:                     c.font, c.fill = _font(C["fail_fg"],True),  _fill(C["fail_bg"])
+            elif v in {"F","FE","Absent","Withheld"}: c.font, c.fill = _font(C["fail_fg"],True), _fill(C["fail_bg"])
+            elif v in PASSING_GRADES:          c.font, c.fill = _font(C["pass_fg"]),       _fill(C["pass_bg"])
+            else:                              c.font, c.fill = _font(),                   alt
     ws.freeze_panes = "A7"
 
 
-# ── MODE 1: external PDF only ─────────────────────────────────────────────────
+def _fmt_analysis_data(ws, start=7):
+    """Colour rows based on Performance column (last column)."""
+    perf_col = ws.max_column
+    for r in range(start, ws.max_row + 1):
+        alt      = _fill(C["light_gray"] if r % 2 == 0 else C["white"])
+        perf_val = str(ws.cell(row=r, column=perf_col).value or "").strip()
+        bg_hex, fg_hex = PERF_COLORS.get(perf_val, (None, C["dark_text"]))
+        for col in range(1, ws.max_column + 1):
+            c = ws.cell(row=r, column=col)
+            if c.value is None: continue
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border    = THIN
+            c.font      = _font(fg_hex if (col == perf_col and bg_hex) else C["dark_text"],
+                                bold=(col == perf_col and bool(bg_hex)))
+            c.fill      = _fill(bg_hex) if (col == perf_col and bg_hex) else alt
+        ws.row_dimensions[r].height = 18
+    ws.freeze_panes = "A7"
 
-def generate_external_excel(external_records: list, output_path: str):
+
+# ── subject analysis builder ──────────────────────────────────────────────────
+
+def _subject_analysis(ext_records, int_records, batch_year) -> pd.DataFrame:
     """
-    One sheet per department.
-    Columns: USN | subject grades... | SGPA | Status
+    Returns one row per subject with: code, name, faculty,
+    appeared, passed, failed, pass%, performance.
+    Only current-batch students, elective skips excluded.
     """
-    # Group records by department
+    # Subject metadata from sessional PDF
+    meta = {}   # code → (name, faculty)
+    for r in int_records:
+        if r.course_code not in meta:
+            meta[r.course_code] = (r.subject_name, r.faculty_name)
+
+    # Which (usn, code) pairs were NOT elected
+    not_elected = {(r.usn, r.course_code) for r in int_records if not r.elected}
+
+    # Only analyse subjects that appear in the sessional PDF
+    # and only for students in the same dept as the sessional PDF
+    known_codes = set(meta.keys())
+    sessional_usns = {r.usn for r in int_records}
+
+    # Accumulate grades per subject (current batch, elected only, known codes only)
+    code_grades = defaultdict(list)
+    for r in _filter_batch(ext_records, batch_year):
+        if (r.course_code in known_codes
+                and r.usn in sessional_usns
+                and (r.usn, r.course_code) not in not_elected):
+            code_grades[r.course_code].append(r.grade)
+
+    rows = []
+    for code in sorted(code_grades):
+        grades   = code_grades[code]
+        appeared = len(grades)
+        if appeared == 0: continue
+
+        passed   = sum(1 for g in grades if g in PASSING_GRADES)
+        failed   = appeared - passed
+        pct      = round(passed / appeared * 100, 1)
+        name, faculty = meta.get(code, (code, "N/A"))
+
+        if pct >= 90:   perf = "Excellent"
+        elif pct >= 75: perf = "Good"
+        elif pct >= 60: perf = "Average"
+        else:           perf = "Needs Improvement"
+
+        rows.append({
+            "Subject Code": code,
+            "Subject Name": name,
+            "Faculty":      faculty,
+            "Appeared":     appeared,
+            "Passed":       passed,
+            "Failed":       failed,
+            "Pass %":       f"{pct}%",
+            "Performance":  perf,
+        })
+    return pd.DataFrame(rows)
+
+
+# ── MODE 1 ────────────────────────────────────────────────────────────────────
+
+def generate_external_excel(ext_records: list, output_path: str, batch_year: str = ""):
     dept_map = defaultdict(list)
-    for r in external_records:
+    for r in _filter_batch(ext_records, batch_year) if batch_year else ext_records:
         dept_map[r.department].append(r)
 
+    titles = {}
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for dept in sorted(dept_map):
             recs = dept_map[dept]
-
-            # Build { usn: { course_code: grade } }
-            student_grades = defaultdict(dict)
-            for r in recs:
-                student_grades[r.usn][r.course_code] = r.grade
-
-            # All subjects that appear in this dept, sorted
-            all_subjects = sorted({r.course_code for r in recs})
+            sg   = defaultdict(dict)
+            for r in recs: sg[r.usn][r.course_code] = r.grade
+            subs = sorted({r.course_code for r in recs})
 
             rows = []
-            for usn in sorted(student_grades):
-                grades = student_grades[usn]
+            for usn in sorted(sg):
+                g   = sg[usn]
                 row = {"Register No": usn}
-
-                arrears = []
-                for sub in all_subjects:
-                    grade = grades.get(sub, "")
-                    row[sub] = grade
-                    if grade and grade not in PASSING_GRADES and grade != "":
-                        arrears.append(sub)
-
-                row["SGPA"] = compute_sgpa(grades)
-                row["Status"] = "✓ PASS" if not arrears else f"✗ {len(arrears)} ARREAR(S)"
+                arr = []
+                for s in subs:
+                    grade = g.get(s, "")
+                    row[s] = grade
+                    if grade and grade not in PASSING_GRADES: arr.append(s)
+                row["SGPA"]   = compute_sgpa(g)
+                row["Status"] = "✓ PASS" if not arr else f"✗ {len(arr)} ARREAR(S)"
                 rows.append(row)
 
-            df = pd.DataFrame(rows)
-            df.to_excel(writer, sheet_name=dept, index=False, startrow=5)
+            pd.DataFrame(rows).to_excel(writer, sheet_name=dept, index=False, startrow=5)
+            lbl = f" — Batch 20{batch_year}" if batch_year else ""
+            titles[dept] = f"{dept} — University Examination Results{lbl}"
 
-    _apply_formatting_pass(output_path)
-    print(f"✅ External-only Excel saved: {output_path}")
+    _post_format(output_path, titles, analysis_sheets=set())
+    print(f"✅ External-only Excel: {output_path}")
 
 
-# ── MODE 2: external + internal (CSE focused) ─────────────────────────────────
+# ── MODE 2 ────────────────────────────────────────────────────────────────────
 
 def generate_merged_excel(
-    external_records: list,
-    internal_records: list,
+    ext_records:  list,
+    int_records:  list,
     name_mapping: dict,
-    output_path: str,
+    output_path:  str,
+    batch_year:   str = "",
 ):
-    """
-    For CSE (or any dept that uploads sessional marks):
-    One sheet per department found in external records.
-    For depts that also have internal records, columns are:
-      USN | Name | [SubjectName - Internal | SubjectName - Grade]... | SGPA | Status
-    For depts without internal data, same as external-only mode.
-    """
-    # Build external lookup: { usn: { course_code: grade } }
-    ext_lookup = defaultdict(dict)
-    ext_dept   = {}
-    for r in external_records:
-        ext_lookup[r.usn][r.course_code] = r.grade
-        ext_dept[r.usn] = r.department
+    if batch_year:
+        ext_records  = _filter_batch(ext_records, batch_year)
+        int_records  = _filter_batch(int_records, batch_year)
+        name_mapping = {u: n for u, n in name_mapping.items()
+                        if _batch_year(u) == batch_year}
 
-    # Build internal lookup: { usn: { course_code: InternalRecord } }
-    int_lookup = defaultdict(dict)
-    for r in internal_records:
-        int_lookup[r.usn][r.course_code] = r
+    ext_lu  = defaultdict(dict)
+    ext_dep = {}
+    for r in ext_records:
+        ext_lu[r.usn][r.course_code] = r.grade
+        ext_dep[r.usn] = r.department
 
-    # Departments from external PDF
+    int_lu = defaultdict(dict)
+    for r in int_records:
+        int_lu[r.usn][r.course_code] = r
+
     dept_usns = defaultdict(set)
-    for usn, dept in ext_dept.items():
+    for usn, dept in ext_dep.items():
         dept_usns[dept].add(usn)
 
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        for dept in sorted(dept_usns):
-            usns = sorted(dept_usns[dept])
-            all_ext_subjects = sorted({
-                code for usn in usns
-                for code in ext_lookup[usn]
-            })
+    titles = {}
+    analysis_sheets = set()
 
-            # Check if we have internal data for this dept
-            has_internal = any(usn in int_lookup for usn in usns)
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+
+        for dept in sorted(dept_usns):
+            usns     = sorted(dept_usns[dept])
+            subs     = sorted({c for u in usns for c in ext_lu[u]})
+            has_int  = any(u in int_lu for u in usns)
 
             rows = []
             for usn in usns:
-                ext_grades = ext_lookup[usn]
-                int_data   = int_lookup.get(usn, {})
-                name       = name_mapping.get(usn, "")
+                eg  = ext_lu[usn]
+                id_ = int_lu.get(usn, {})
+                row = {"Register No": usn, "Name": name_mapping.get(usn, "")}
+                arr, sgpa_g = [], {}
 
-                row = {"Register No": usn, "Name": name}
-
-                arrears = []
-                sgpa_grades = {}   # only elected subjects go into SGPA
-
-                for code in all_ext_subjects:
-                    grade = ext_grades.get(code, "")
-
-                    if has_internal:
-                        irec = int_data.get(code)
-
+                for code in subs:
+                    grade = eg.get(code, "")
+                    if has_int:
+                        irec = id_.get(code)
                         if irec and not irec.elected:
-                            # Elective not chosen — show dash
                             row[f"{code} Internal"] = "—"
                             row[f"{code} Grade"]    = "—"
                             continue
-
-                        internal_val = irec.internal_mark if irec else ""
-                        row[f"{code} Internal"] = internal_val
+                        row[f"{code} Internal"] = irec.internal_mark if irec else ""
                         row[f"{code} Grade"]    = grade
                     else:
                         row[code] = grade
-
-                    # Track arrears and SGPA
                     if grade:
-                        sgpa_grades[code] = grade
-                        if grade not in PASSING_GRADES:
-                            arrears.append(code)
+                        sgpa_g[code] = grade
+                        if grade not in PASSING_GRADES: arr.append(code)
 
-                row["SGPA"]   = compute_sgpa(sgpa_grades)
-                row["Status"] = "✓ PASS" if not arrears else f"✗ {len(arrears)} ARREAR(S)"
+                row["SGPA"]   = compute_sgpa(sgpa_g)
+                row["Status"] = "✓ PASS" if not arr else f"✗ {len(arr)} ARREAR(S)"
                 rows.append(row)
 
-            df = pd.DataFrame(rows)
-            df.to_excel(writer, sheet_name=dept, index=False, startrow=5)
+            pd.DataFrame(rows).to_excel(writer, sheet_name=dept, index=False, startrow=5)
+            lbl = f" — Batch 20{batch_year}" if batch_year else ""
+            titles[dept] = (
+                f"{dept} — Internal + University Results{lbl}" if has_int
+                else f"{dept} — University Examination Results{lbl}"
+            )
 
-    _apply_formatting_pass(output_path)
-    print(f"✅ Merged Excel saved: {output_path}")
+        # Subject Analysis sheet
+        if int_records:
+            df_analysis = _subject_analysis(ext_records, int_records, batch_year)
+            if not df_analysis.empty:
+                df_analysis.to_excel(
+                    writer, sheet_name="Subject Analysis", index=False, startrow=5
+                )
+                lbl = f" — Batch 20{batch_year}" if batch_year else ""
+                titles["Subject Analysis"] = f"Subject-wise Pass/Fail Analysis{lbl}"
+                analysis_sheets.add("Subject Analysis")
+
+    _post_format(output_path, titles, analysis_sheets)
+    print(f"✅ Merged Excel: {output_path}")
 
 
-# ── formatting post-pass ──────────────────────────────────────────────────────
+# ── post-format pass ──────────────────────────────────────────────────────────
 
-def _apply_formatting_pass(path: str):
+def _post_format(path: str, titles: dict, analysis_sheets: set):
     wb = load_workbook(path)
-    for sheet_name in wb.sheetnames:
-        ws = wb[sheet_name]
-        max_col = ws.max_column
+    for sname in wb.sheetnames:
+        ws    = wb[sname]
+        title = titles.get(sname, sname)
+        _write_header(ws, title, ws.max_column)
+        _fmt_col_headers(ws, row=6)
 
-        # Determine sheet title
-        title = f"{sheet_name} Department — University Examination Results"
-
-        _write_sheet_header(ws, title, max_col)
-        _format_header_row(ws, row=6)
-        _format_data_rows(ws, start_row=7)
-
-        # Column widths
-        ws.column_dimensions["A"].width = 18
-        ws.column_dimensions["B"].width = 24
-        for i in range(3, max_col + 1):
-            ws.column_dimensions[get_column_letter(i)].width = 14
-
+        if sname in analysis_sheets:
+            _fmt_analysis_data(ws, start=7)
+            # Custom column widths for analysis
+            for col, w in zip("ABCDEFGH", [13, 36, 30, 11, 10, 10, 10, 20]):
+                ws.column_dimensions[get_column_letter(ord(col)-64)].width = w
+        else:
+            _fmt_result_data(ws, start=7)
+            ws.column_dimensions["A"].width = 18
+            ws.column_dimensions["B"].width = 26
     wb.save(path)

@@ -51,6 +51,18 @@ def parse_subject_footer(text: str) -> dict:
     return subject_map
 
 
+def detect_batch_year(text: str) -> str:
+    """
+    Extract 2-digit batch year from sessional PDF header.
+    e.g. 'Batch & Semester :2022-2026 S7'  →  '22'
+    Returns '' if not found.
+    """
+    m = re.search(r'Batch.*?:(\d{4})-\d{4}', text)
+    if m:
+        return m.group(1)[2:]   # '2022' → '22'
+    return ''
+
+
 def parse_sessional_pdf(pdf_path: str) -> tuple:
     """
     Parse the college sessional marks PDF.
@@ -161,4 +173,5 @@ def parse_sessional_pdf(pdf_path: str) -> tuple:
                 elected=elected,
             ))
 
-    return records, name_mapping
+    batch_year = detect_batch_year(text)
+    return records, name_mapping, batch_year

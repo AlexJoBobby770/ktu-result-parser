@@ -89,16 +89,19 @@ async def upload_result(
     excel_path     = os.path.join(OUTPUT_DIR, excel_filename)
 
     if internal_file:
-        # Save sessional PDF
         int_path = os.path.join(UPLOAD_DIR, f"{session_id}_sessional.pdf")
         with open(int_path, "wb") as f:
             shutil.copyfileobj(internal_file.file, f)
 
         print(f"[{session_id}] Parsing sessional PDF...")
-        internal_records, name_mapping = parse_sessional_pdf(int_path)
+        internal_records, name_mapping, batch_year = parse_sessional_pdf(int_path)
+        print(f"[{session_id}] Detected batch year: 20{batch_year}")
 
         print(f"[{session_id}] Generating merged Excel...")
-        generate_merged_excel(external_records, internal_records, name_mapping, excel_path)
+        generate_merged_excel(
+            external_records, internal_records, name_mapping,
+            excel_path, batch_year=batch_year
+        )
         mode = "merged"
     else:
         print(f"[{session_id}] Generating external-only Excel...")
