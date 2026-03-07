@@ -1,6 +1,5 @@
 # backend/data_merger.py
 from typing import List, Dict, Tuple
-from models import InternalRecord, ExternalRecord, MergedRecord
 from collections import defaultdict
 
 
