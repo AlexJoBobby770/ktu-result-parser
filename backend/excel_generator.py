@@ -23,6 +23,10 @@ THIN = Border(
     left=Side(style="thin", color="D1D5DB"), right=Side(style="thin", color="D1D5DB"),
     top=Side(style="thin",  color="D1D5DB"), bottom=Side(style="thin",color="D1D5DB"),
 )
+TOP10_BG  = "FEF08A"   # bright yellow
+TOP10_FG  = "713F12"   # dark amber
+RANK_FILL = "EAB308"   # gold for rank badge cell
+
 PERF_COLORS = {
     "Excellent":         ("D1FAE5", "065F46"),
     "Good":              ("DBEAFE", "1E40AF"),
@@ -302,6 +306,70 @@ def generate_merged_excel(
     print(f"✅ Merged Excel: {output_path}")
 
 
+# ── top-10 highlighter ────────────────────────────────────────────────────────
+
+def _highlight_top10(ws, start=7):
+    """
+    Find the SGPA column, pick the top 10 rows by value,
+    paint every cell in those rows gold, and write '🏆 #N' in the SGPA cell.
+    Handles ties: if two students share rank 10, both are highlighted.
+    """
+    # Find SGPA column index from header row (row 6)
+    sgpa_col = None
+    for col in range(1, ws.max_column + 1):
+        if str(ws.cell(row=6, column=col).value or "").strip() == "SGPA":
+            sgpa_col = col
+            break
+    if sgpa_col is None:
+        return
+
+    # Collect (row_index, sgpa_value) for all data rows
+    row_sgpas = []
+    for r in range(start, ws.max_row + 1):
+        val = ws.cell(row=r, column=sgpa_col).value
+        if val is None:
+            continue
+        try:
+            row_sgpas.append((r, float(val)))
+        except (ValueError, TypeError):
+            pass
+
+    if not row_sgpas:
+        return
+
+    # Sort descending, find the cutoff value at rank 10
+    row_sgpas.sort(key=lambda x: x[1], reverse=True)
+    top10_cutoff = row_sgpas[min(9, len(row_sgpas) - 1)][1]
+
+    # Assign ranks (handle ties: same SGPA = same rank)
+    rank = 1
+    prev_sgpa = None
+    row_ranks = {}
+    for i, (r, sgpa) in enumerate(row_sgpas):
+        if sgpa != prev_sgpa:
+            rank = i + 1
+        row_ranks[r] = rank
+        prev_sgpa = sgpa
+
+    # Paint top-10 rows
+    top_rows = {r for r, sgpa in row_sgpas if sgpa >= top10_cutoff}
+
+    for r in top_rows:
+        rank_n = row_ranks[r]
+        for col in range(1, ws.max_column + 1):
+            c = ws.cell(row=r, column=col)
+            if c.value is None:
+                continue
+            if col == sgpa_col:
+                c.value = f"🏆 #{rank_n}  {c.value}"
+                c.font  = Font(name="Calibri", size=10, bold=True, color=TOP10_FG)
+                c.fill  = _fill(RANK_FILL)
+            else:
+                # Keep existing font color logic but override fill
+                c.font = Font(name="Calibri", size=10, bold=True, color=TOP10_FG)
+                c.fill = _fill(TOP10_BG)
+
+
 # ── post-format pass ──────────────────────────────────────────────────────────
 
 def _post_format(path: str, titles: dict, analysis_sheets: set):
@@ -319,6 +387,7 @@ def _post_format(path: str, titles: dict, analysis_sheets: set):
                 ws.column_dimensions[get_column_letter(ord(col)-64)].width = w
         else:
             _fmt_result_data(ws, start=7)
+            _highlight_top10(ws, start=7)
             ws.column_dimensions["A"].width = 18
             ws.column_dimensions["B"].width = 26
     wb.save(path)
