@@ -1,240 +1,177 @@
 # backend/internal_parser.py
-from email.mime import text
 import re
-import PyPDF2
-from typing import List, Dict, Tuple
+import pdfplumber
 from models import InternalRecord
 
 
-def extract_text_from_pdf(pdf_path: str) -> str:
-    """Extract text from PDF"""
+# Matches the footer course table lines like:
+# 1 MCN401 INDUSTRIAL SAFETY ENGINEERING Ms. Shruthi Chandran
+FOOTER_PATTERN = re.compile(
+    r'^\d+\s+([A-Z]{2,4}\d{3})\s+(.+?)\s+((?:Ms\.|Mr\.|Dr\.)\s+\S.+)$'
+)
+
+# USN pattern - same prefixes as KTU PDF
+USN_PATTERN = re.compile(r'^((?:AIK|LAIK|SGI|SPT|GWE|MZW)\d{2}[A-Z]{2}\d{3})$')
+
+
+def extract_text(pdf_path: str) -> str:
     text = ""
-    with open(pdf_path, "rb") as f:
-        reader = PyPDF2.PdfReader(f)
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            t = page.extract_text()
+            if t:
+                text += t + "\n"
     return text
 
 
-def parse_subject_mapping(text: str) -> Dict[str, Tuple[str, str]]:
+def parse_subject_footer(text: str) -> dict:
     """
-    Parse the subject code to subject name and faculty mapping from the footer table.
-    
-    Returns:
-        Dict mapping subject_code -> (subject_name, faculty_name)
+    Parse the footer table at the bottom of the sessional PDF.
+    Returns { "CST401": ("ARTIFICIAL INTELLIGENCE", "Ms. NISY JOHN PANICKER"), ... }
+    One entry per unique subject code (multiple faculty lines are merged).
     """
     subject_map = {}
-    
-    # Look for lines that start with a number followed by subject code
-    # Example: "1 MCN401 INDUSTRIAL SAFETY ENGINEERING Ms. Shruthi Chandran"
-    pattern = r'\d+\s+([A-Z]{3}\d{3})\s+([A-Z\s]+(?:[A-Z\s]+)?)\s+(?:Ms\.|Mr\.|Dr\.)\s+([A-Za-z\s.]+)'
-    
-    matches = re.findall(pattern, text)
-    
-    for match in matches:
-        code = match[0].strip()
-        subject_name = match[1].strip()
-        faculty_name = match[2].strip()
-        
-        # Store or update mapping (some subjects may have multiple faculty)
+
+    for line in text.split("\n"):
+        m = FOOTER_PATTERN.match(line.strip())
+        if not m:
+            continue
+
+        code = m.group(1).strip()
+        name = m.group(2).strip()
+        faculty = m.group(3).strip()
+
         if code not in subject_map:
-            subject_map[code] = (subject_name, faculty_name)
+            subject_map[code] = (name, faculty)
         else:
-            # If subject already exists, append faculty name
-            existing_subject, existing_faculty = subject_map[code]
-            subject_map[code] = (existing_subject, f"{existing_faculty}, {faculty_name}")
-    
+            # Multiple faculty for same subject — append name
+            existing_name, existing_faculty = subject_map[code]
+            subject_map[code] = (existing_name, f"{existing_faculty}, {faculty}")
+
     return subject_map
 
 
-def parse_internal_marks(pdf_path: str) -> Tuple[List[InternalRecord], Dict[str, str]]:
+def detect_batch_year(text: str) -> str:
     """
-    Fully dynamic internal marks parser.
-    Works for any semester, any subject count.
+    Extract 2-digit batch year from sessional PDF header.
+    e.g. 'Batch & Semester :2022-2026 S7'  →  '22'
+    Returns '' if not found.
     """
+    m = re.search(r'Batch.*?:(\d{4})-\d{4}', text)
+    if m:
+        return m.group(1)[2:]   # '2022' → '22'
+    return ''
 
-    text = extract_text_from_pdf(pdf_path)
 
-    # ---------------------------------------------------
-    # 1️⃣ Extract subject metadata from footer
-    # ---------------------------------------------------
-    subject_map = parse_subject_mapping(text)
+def parse_sessional_pdf(pdf_path: str) -> tuple:
+    """
+    Parse the college sessional marks PDF.
+
+    Returns:
+        records     : list of InternalRecord
+        name_mapping: { usn: student_name }
+
+    How electives work in the PDF:
+        Subjects are listed left-to-right in the header row.
+        Each subject has TWO columns: Mark and Att%.
+        For a skipped elective the Mark column contains '*'
+        and the Att% column contains a number (0 or 100).
+        We use elected=False for those records and internal_mark=0.
+    """
+    text = extract_text(pdf_path)
+
+    # Cut text before footer stats so "Class Average" etc. don't confuse parsing
+    cutoff = text.find("Class Average")
+    body = text[:cutoff] if cutoff > 0 else text
+
+    # Parse footer AFTER cutoff to get subject metadata
+    subject_map = parse_subject_footer(text)
 
     if not subject_map:
-        raise ValueError("Could not extract subject metadata from footer")
+        raise ValueError(
+            "Could not find subject footer table in sessional PDF. "
+            "Check that the PDF has the '# Course Code ...' section."
+        )
 
     subject_codes = list(subject_map.keys())
     subject_count = len(subject_codes)
 
-    # ---------------------------------------------------
-    # 2️⃣ Convert entire text into token stream
-    # ---------------------------------------------------
-    tokens = text.split()
-
     records = []
     name_mapping = {}
 
+    tokens = body.split()
     i = 0
-    total_tokens = len(tokens)
+    total = len(tokens)
 
-    reg_pattern = re.compile(r'^(AIK|LAIK|SGI)\d{2}[A-Z]{2}\d{3}$')
-
-    while i < total_tokens:
-
+    while i < total:
         token = tokens[i]
 
-        # Detect register number
-        if reg_pattern.match(token):
-
-            regno = token
+        # Skip roll number (pure integer)
+        if re.match(r'^\d{1,3}$', token):
             i += 1
+            continue
 
-            # ---------------------------------------------------
-            # Extract student name (until first numeric mark)
-            # ---------------------------------------------------
-            name_parts = []
-            while i < total_tokens and not re.match(r'^\d+(\.\d+)?$', tokens[i]):
-                name_parts.append(tokens[i])
-                i += 1
+        # Detect USN
+        if not USN_PATTERN.match(token):
+            i += 1
+            continue
 
-            student_name = " ".join(name_parts).strip()
-            name_mapping[regno] = student_name
+        usn = token
+        i += 1
 
-            # ---------------------------------------------------
-            # Extract marks dynamically
-            # For each subject: mark + attendance
-            # ---------------------------------------------------
-            marks = []
+        # --- Extract student name ---
+        # Name tokens are uppercase alphabetic words (may include spaces)
+        # Stop when we hit a number (first mark value)
+        name_parts = []
+        while i < total and not re.match(r'^\d+(\.\d+)?$', tokens[i]):
+            name_parts.append(tokens[i])
+            i += 1
+        student_name = " ".join(name_parts).strip()
+        name_mapping[usn] = student_name
 
-            for _ in range(subject_count):
+        # --- Extract marks for each subject in order ---
+        marks = []    # list of (mark_int, elected_bool)
 
-                # Skip "*" if present
-                if i < total_tokens and tokens[i] == "*":
+        for _ in range(subject_count):
+            if i >= total:
+                marks.append((0, False))
+                continue
+
+            if tokens[i] == "*":
+                # Elective NOT chosen by student
+                i += 1  # skip '*'
+                if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
+                    i += 1  # skip the attendance number that follows *
+                marks.append((0, False))
+            else:
+                # Normal subject: mark then att%
+                mark_val = 0
+                if re.match(r'^\d+$', tokens[i]):
+                    mark_val = int(tokens[i])
                     i += 1
-
-                # Internal mark
-                if i < total_tokens and re.match(r'^\d+(\.\d+)?$', tokens[i]):
-                    mark = int(float(tokens[i]))
-                    marks.append(mark)
-                    i += 1
-                else:
-                    marks.append(0)
-
                 # Skip attendance %
-                if i < total_tokens and re.match(r'^\d+(\.\d+)?$', tokens[i]):
+                if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
                     i += 1
+                marks.append((mark_val, True))
 
-            # Skip total column if present
-            if i < total_tokens and re.match(r'^\d+(\.\d+)?$', tokens[i]):
-                i += 1
-
-            # ---------------------------------------------------
-            # Create records
-            # ---------------------------------------------------
-            for idx, subject_code in enumerate(subject_codes):
-
-                subject_name, faculty_name = subject_map.get(
-                    subject_code,
-                    (subject_code, "N/A")
-                )
-
-                record = InternalRecord(
-                    register_no=regno,
-                    student_name=student_name,
-                    subject_code=subject_code,
-                    subject_name=subject_name,
-                    faculty_name=faculty_name,
-                    internal_mark=marks[idx] if idx < len(marks) else 0
-                )
-
-                records.append(record)
-
-        else:
+        # Skip Total column (one final integer)
+        if i < total and re.match(r'^\d+$', tokens[i]):
             i += 1
 
-    return records, name_mapping
+        # Build InternalRecord for each subject
+        for idx, code in enumerate(subject_codes):
+            subject_name, faculty_name = subject_map[code]
+            mark, elected = marks[idx] if idx < len(marks) else (0, False)
 
-def validate_internal_data(records: List[InternalRecord]) -> Dict:
-    """Validate and provide statistics about internal marks"""
-    
-    if not records:
-        return {
-            "valid": False,
-            "error": "No records found"
-        }
-    
-    # Check for invalid marks
-    invalid_marks = [r for r in records if r.internal_mark < 0 or r.internal_mark > 50]
-    
-    # Get unique counts
-    unique_students = set(r.register_no for r in records)
-    unique_subjects = set(r.subject_code for r in records)
-    unique_faculty = set(r.faculty_name for r in records)
-    
-    # Get subject statistics
-    subject_stats = {}
-    for record in records:
-        if record.subject_code not in subject_stats:
-            subject_stats[record.subject_code] = {
-                'name': record.subject_name,
-                'faculty': record.faculty_name,
-                'count': 0,
-                'total': 0,
-                'max': 0,
-                'min': 50
-            }
-        
-        stats = subject_stats[record.subject_code]
-        stats['count'] += 1
-        stats['total'] += record.internal_mark
-        stats['max'] = max(stats['max'], record.internal_mark)
-        stats['min'] = min(stats['min'], record.internal_mark)
-    
-    # Calculate averages
-    for code in subject_stats:
-        stats = subject_stats[code]
-        stats['average'] = round(stats['total'] / stats['count'], 2)
-    
-    return {
-        "valid": len(invalid_marks) == 0,
-        "total_records": len(records),
-        "unique_students": len(unique_students),
-        "unique_subjects": len(unique_subjects),
-        "unique_faculty": len(unique_faculty),
-        "invalid_marks_count": len(invalid_marks),
-        "students": sorted(list(unique_students))[:5],  # Sample
-        "subjects": {code: stats['name'] for code, stats in subject_stats.items()},
-        "subject_stats": subject_stats
-    }
+            records.append(InternalRecord(
+                usn=usn,
+                student_name=student_name,
+                course_code=code,
+                subject_name=subject_name,
+                faculty_name=faculty_name,
+                internal_mark=mark,
+                elected=elected,
+            ))
 
-
-if __name__ == "__main__":
-    # Test the parser
-    import sys
-    
-    pdf_path = sys.argv[1] if len(sys.argv) > 1 else "Sessionals_S7_CSE.pdf"
-    
-    print(f"📄 Parsing: {pdf_path}\n")
-    
-    records, name_map = parse_internal_marks(pdf_path)
-    
-    print(f"✅ Found {len(records)} internal mark records")
-    print(f"✅ Found {len(name_map)} students\n")
-    
-    # Show validation stats
-    stats = validate_internal_data(records)
-    print("📊 Validation Stats:")
-    print(f"  - Total Records: {stats['total_records']}")
-    print(f"  - Unique Students: {stats['unique_students']}")
-    print(f"  - Unique Subjects: {stats['unique_subjects']}")
-    print(f"  - Unique Faculty: {stats['unique_faculty']}")
-    print(f"\n📚 Subjects Found:")
-    for code, name in stats['subjects'].items():
-        subject_stats = stats['subject_stats'][code]
-        print(f"  - {code}: {name}")
-        print(f"    Faculty: {subject_stats['faculty']}")
-        print(f"    Avg: {subject_stats['average']}, Max: {subject_stats['max']}, Min: {subject_stats['min']}")
-    
-    print(f"\n👥 Sample Students:")
-    for regno in stats['students']:
-        print(f"  - {regno}: {name_map[regno]}")
+    batch_year = detect_batch_year(text)
+    return records, name_mapping, batch_year
