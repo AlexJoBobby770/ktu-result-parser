@@ -33,43 +33,35 @@ const TICKER = [
   {  label: "Output Format",        val: "XLSX / Excel" },
   {  label: "Auth Protocol",        val: "Firebase" },
   {  label: "Data Retention",       val: "Zero" },
-  { icon: "🚀", label: "Pipeline Stages",      val: "5-Step" },
+  {  label: "Pipeline Stages",      val: "5-Step" },
 ];
 
 export default function Hero({ onScrollToUpload }) {
-  const heroRef    = useRef(null);
-  const chipRef    = useRef(null);
-  const headlineRef = useRef(null);
+  const heroRef = useRef(null);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
+
+      /* ── SET initial positions FIRST, before timeline ── */
+      gsap.set(".hero-chip",           { opacity: 0, y: 12 });
+      gsap.set(".hero-headline",       { opacity: 1 });
+      gsap.set(".hero-headline-inner", { y: "100%" });
+      gsap.set(".hero-desc",           { opacity: 0, y: 16 });
+      gsap.set(".hero-cta-row",        { opacity: 0, y: 16 });
+      gsap.set(".hero-social-proof",   { opacity: 0, y: 16 });
+      gsap.set(".hero-right",          { opacity: 0, x: 40 });
+      gsap.set(".hero-ticker",         { opacity: 0 });
+
+      /* ── THEN run timeline ── */
       const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
-      /* 1. Chip entrance */
-      tl.to(".hero-chip",        { opacity: 1, y: 0, duration: 0.7 }, 0.2)
-
-      /* 2. Headline lines cascade */
-        .to(".hero-headline",      { opacity: 1, duration: 0 }, 0.55)
-        .to(".hero-headline-inner",{ y: "0%", duration: 0.9, stagger: 0.12, ease: "power4.out" }, 0.55)
-
-      /* 3. Desc + CTA */
-        .to(".hero-desc",          { opacity: 1, y: 0, duration: 0.7 }, 1.1)
-        .to(".hero-cta-row",       { opacity: 1, y: 0, duration: 0.7 }, 1.3)
-        .to(".hero-social-proof",  { opacity: 1, y: 0, duration: 0.7 }, 1.45)
-
-      /* 4. Right viz card */
-        .to(".hero-right",         { opacity: 1, x: 0, duration: 1.0, ease: "power2.out" }, 0.7)
-
-      /* 5. Ticker bar */
-        .to(".hero-ticker",        { opacity: 1, duration: 0.6 }, 1.6);
-
-      /* Initial positions */
-      gsap.set(".hero-chip",        { y: 12 });
-      gsap.set(".hero-headline-inner", { y: "100%" });
-      gsap.set(".hero-desc",        { y: 16 });
-      gsap.set(".hero-cta-row",     { y: 16 });
-      gsap.set(".hero-social-proof",{ y: 16 });
-      gsap.set(".hero-right",       { x: 40 });
+      tl.to(".hero-chip",           { opacity: 1, y: 0, duration: 0.7 }, 0.2)
+        .to(".hero-headline-inner", { y: "0%", duration: 0.9, stagger: 0.12, ease: "power4.out" }, 0.55)
+        .to(".hero-desc",           { opacity: 1, y: 0, duration: 0.7 }, 1.1)
+        .to(".hero-cta-row",        { opacity: 1, y: 0, duration: 0.7 }, 1.3)
+        .to(".hero-social-proof",   { opacity: 1, y: 0, duration: 0.7 }, 1.45)
+        .to(".hero-right",          { opacity: 1, x: 0, duration: 1.0, ease: "power2.out" }, 0.7)
+        .to(".hero-ticker",         { opacity: 1, duration: 0.6 }, 1.6);
 
     }, heroRef);
 
@@ -120,13 +112,20 @@ export default function Hero({ onScrollToUpload }) {
       {/* ── GRID ── */}
       <div className="hero-grid" aria-hidden />
 
-
       {/* ── MAIN CONTENT ── */}
       <div className="hero-content">
 
         {/* LEFT COLUMN */}
         <div className="hero-left">
 
+          {/* Chip */}
+          <div className="hero-chip">
+            <span className="hero-chip-badge">
+              <span className="chip-live-dot" />
+              LIVE
+            </span>
+            KTU Result Parser · v2.0
+          </div>
 
           {/* Headline */}
           <h1 className="hero-headline">
@@ -182,8 +181,6 @@ export default function Hero({ onScrollToUpload }) {
         {/* RIGHT COLUMN — Visualization */}
         <div className="hero-right">
           <div className="hero-viz">
-
-
 
             {/* Main card */}
             <div className="viz-card">
@@ -273,7 +270,6 @@ export default function Hero({ onScrollToUpload }) {
         <div className="ticker-track">
           {[...TICKER, ...TICKER].map((item, i) => (
             <span key={i} className="ticker-item">
-              <span>{item.icon}</span>
               <span>{item.label}</span>
               <span className="ticker-val">{item.val}</span>
               <span className="ticker-sep">·</span>

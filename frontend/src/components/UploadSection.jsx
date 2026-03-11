@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useCallback } from "react";
+import { useState, useEffect, useRef, forwardRef, useCallback, Fragment } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import "./UploadSection.css";
@@ -34,11 +34,10 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
   const [showExtraSheet, setShowExtraSheet] = useState(false);
   const [excelFile, setExcelFile]           = useState(null);
 
-  const sectionRef    = useRef(null);
-  const dropzoneRef   = useRef(null);
-  const fileInputRef  = useRef(null);
-  const timerRef      = useRef(null);
-  const startTimeRef  = useRef(null);
+  const sectionRef   = useRef(null);
+  const dropzoneRef  = useRef(null);
+  const fileInputRef = useRef(null);
+  const startTimeRef = useRef(null);
 
   /* GSAP entrance */
   useEffect(() => {
@@ -96,7 +95,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
       const res = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
-        body: form,  // No headers!
+        body: form,
       });
       const data = await res.json();
       const ms   = Date.now() - startTimeRef.current;
@@ -107,7 +106,6 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
         return;
       }
 
-      /* finish pipeline animation */
       setDoneSteps(PIPELINE.map((_, i) => i));
       setActiveStep(-1);
       setElapsed((ms / 1000).toFixed(2));
@@ -245,7 +243,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
               {pdfFile ? (
                 <>
-                  <div className="upload-dropzone-title">File loaded & ready</div>
+                  <div className="upload-dropzone-title">File loaded &amp; ready</div>
                   <div className="upload-dropzone-sub">
                     Click <span>Process File</span> below to start the pipeline,<br />
                     or drop a new PDF to replace.
@@ -270,7 +268,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
             {/* Selected file strip */}
             {pdfFile && (
-              <div className="upload-file-selected" style={{marginTop: '1rem'}}>
+              <div className="upload-file-selected" style={{ marginTop: "1rem" }}>
                 <div className="file-selected-icon">PDF</div>
                 <div className="file-selected-info">
                   <div className="file-selected-name">{pdfFile.name}</div>
@@ -371,7 +369,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
             {/* Status bar */}
             {uploadStatus.message && (
-              <div className={`upload-status-bar ${uploadStatus.type}`} style={{marginTop:'1rem'}}>
+              <div className={`upload-status-bar ${uploadStatus.type}`} style={{ marginTop: "1rem" }}>
                 <div className="status-bar-icon">
                   {uploadStatus.type === "success" && (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -386,7 +384,9 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                       <line x1="12" y1="16" x2="12.01" y2="16"/>
                     </svg>
                   )}
-                  {uploadStatus.type === "loading" && <span className="btn-spinner" style={{borderColor:'rgba(96,165,250,0.3)', borderTopColor:'#60a5fa'}}/>}
+                  {uploadStatus.type === "loading" && (
+                    <span className="btn-spinner" style={{ borderColor: "rgba(96,165,250,0.3)", borderTopColor: "#60a5fa" }}/>
+                  )}
                 </div>
                 <span className="status-bar-text">{uploadStatus.message}</span>
               </div>
@@ -394,7 +394,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
             {/* Download panel */}
             {showDownload && (
-              <div className="download-panel" style={{marginTop:'1rem'}}>
+              <div className="download-panel" style={{ marginTop: "1rem" }}>
                 <div className="download-header">
                   <div className="download-success-icon">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -409,7 +409,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
                 <div className="download-file-row">
                   <div className="download-file-icon">XLSX</div>
-                  <div className="download-file-name">KTU_Results_{sessionId?.slice(0,8)}.xlsx</div>
+                  <div className="download-file-name">KTU_Results_{sessionId?.slice(0, 8)}.xlsx</div>
                   <button className="download-btn" onClick={handleDownload}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -479,27 +479,19 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             {/* Metrics card */}
             <div className="metrics-card">
               <div className="metric-item">
-                <div className="metric-val green">
-                  {elapsed ? `${elapsed}s` : "—"}
-                </div>
+                <div className="metric-val green">{elapsed ? `${elapsed}s` : "—"}</div>
                 <div className="metric-label">Process Time</div>
               </div>
               <div className="metric-item">
-                <div className="metric-val blue">
-                  {pdfFile ? formatBytes(pdfFile.size) : "—"}
-                </div>
+                <div className="metric-val blue">{pdfFile ? formatBytes(pdfFile.size) : "—"}</div>
                 <div className="metric-label">Input Size</div>
               </div>
               <div className="metric-item">
-                <div className="metric-val amber">
-                  {showDownload ? "100%" : "—"}
-                </div>
+                <div className="metric-val amber">{showDownload ? "100%" : "—"}</div>
                 <div className="metric-label">Data Fidelity</div>
               </div>
               <div className="metric-item">
-                <div className="metric-val purple">
-                  {showDownload ? "5" : "—"}
-                </div>
+                <div className="metric-val purple">{showDownload ? "5" : "—"}</div>
                 <div className="metric-label">Stages Run</div>
               </div>
             </div>
@@ -516,13 +508,13 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, label: "KTU Format Native" },
             { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, label: "Live Pipeline Tracking" },
           ].map((item, i, arr) => (
-            <>
-              <div key={item.label} className="trust-item">
+            <Fragment key={item.label}>
+              <div className="trust-item">
                 {item.icon}
                 {item.label}
               </div>
-              {i < arr.length - 1 && <span key={`sep-${i}`} className="trust-sep" />}
-            </>
+              {i < arr.length - 1 && <span className="trust-sep" />}
+            </Fragment>
           ))}
         </div>
 
