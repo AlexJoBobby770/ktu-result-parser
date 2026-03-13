@@ -29,3 +29,4 @@ database/*.db
 # Frontend
 node_modules/
 dist/
+frontend/src/firebase.js
