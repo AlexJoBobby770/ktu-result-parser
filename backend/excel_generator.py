@@ -243,6 +243,9 @@ def generate_merged_excel(
     for r in int_records:
         int_lu[r.usn][r.course_code] = r
 
+    # USNs in the sessional PDF = one division only (e.g. CSA or CSB)
+    sessional_usns = set(int_lu.keys())
+
     dept_usns = defaultdict(set)
     for usn, dept in ext_dep.items():
         dept_usns[dept].add(usn)
@@ -253,9 +256,17 @@ def generate_merged_excel(
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
 
         for dept in sorted(dept_usns):
-            usns     = sorted(dept_usns[dept])
+            all_dept_usns = dept_usns[dept]
+            has_int = bool(all_dept_usns & sessional_usns)
+
+            # If sessional data exists for this dept, show only that division's students.
+            # Depts with no sessional data (CE, ME, etc.) show all their students.
+            if has_int:
+                usns = sorted(all_dept_usns & sessional_usns)
+            else:
+                usns = sorted(all_dept_usns)
+
             subs     = sorted({c for u in usns for c in ext_lu[u]})
-            has_int  = any(u in int_lu for u in usns)
 
             rows = []
             for usn in usns:
