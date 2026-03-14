@@ -1,18 +1,9 @@
-import { useState, useEffect, useRef, forwardRef, useCallback } from "react";
+import { useState, useEffect, useRef, forwardRef, useCallback, Fragment } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import "./UploadSection.css";
 
 gsap.registerPlugin(ScrollTrigger);
-
-/* ── PIPELINE STEPS CONFIG ── */
-const PIPELINE = [
-  { id: "ingest",   label: "File Ingestion",     detail: "Validating PDF structure..." },
-  { id: "extract",  label: "Text Extraction",     detail: "Reading page contents..." },
-  { id: "parse",    label: "Grade Parsing",       detail: "Identifying subjects & scores..." },
-  { id: "compile",  label: "Data Compilation",    detail: "Structuring rows & columns..." },
-  { id: "export",   label: "Excel Generation",    detail: "Writing .xlsx output..." },
-];
 
 function formatBytes(bytes) {
   if (!bytes) return "—";
@@ -22,50 +13,37 @@ function formatBytes(bytes) {
 }
 
 const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
-  const [pdfFile, setPdfFile]           = useState(null);
-  const [dragOver, setDragOver]         = useState(false);
-  const [isUploading, setIsUploading]   = useState(false);
-  const [uploadStatus, setUploadStatus] = useState({ message: "", type: "" });
-  const [sessionId, setSessionId]       = useState(null);
-  const [showDownload, setShowDownload] = useState(false);
-  const [activeStep, setActiveStep]     = useState(-1);
-  const [doneSteps, setDoneSteps]       = useState([]);
-  const [elapsed, setElapsed]           = useState(null);
+  const [pdfFile, setPdfFile]               = useState(null);
+  const [batchYear, setBatchYear]           = useState("");       // ← NEW
+  const [dragOver, setDragOver]             = useState(false);
+  const [isUploading, setIsUploading]       = useState(false);
+  const [uploadStatus, setUploadStatus]     = useState({ message: "", type: "" });
+  const [sessionId, setSessionId]           = useState(null);
+  const [showDownload, setShowDownload]     = useState(false);
+  const [elapsed, setElapsed]               = useState(null);
   const [showExtraSheet, setShowExtraSheet] = useState(false);
   const [excelFile, setExcelFile]           = useState(null);
 
-  const sectionRef    = useRef(null);
-  const dropzoneRef   = useRef(null);
-  const fileInputRef  = useRef(null);
-  const timerRef      = useRef(null);
-  const startTimeRef  = useRef(null);
+  const sectionRef   = useRef(null);
+  const fileInputRef = useRef(null);
+  const startTimeRef = useRef(null);
 
   /* GSAP entrance */
   useEffect(() => {
     const el = ref?.current || sectionRef.current;
     if (!el) return;
-    gsap.fromTo(el, { opacity: 0, y: 60 }, {
-      opacity: 1, y: 0, duration: 1.1, ease: "power3.out",
-      scrollTrigger: { trigger: el, start: "top 82%" },
-    });
-  }, [ref]);
-
-  /* animate pipeline steps while uploading */
-  useEffect(() => {
-    if (!isUploading) return;
-    setActiveStep(0);
-    setDoneSteps([]);
-    startTimeRef.current = Date.now();
-
-    const delays = [0, 600, 1300, 2100, 3000];
-    const timers = PIPELINE.map((_, i) =>
-      setTimeout(() => {
-        setActiveStep(i);
-        if (i > 0) setDoneSteps(prev => [...prev, i - 1]);
-      }, delays[i])
+    gsap.fromTo(
+      el.querySelectorAll(".us-animate"),
+      { opacity: 0, y: 32 },
+      {
+        opacity: 1, y: 0,
+        duration: 0.8,
+        stagger: 0.1,
+        ease: "power3.out",
+        scrollTrigger: { trigger: el, start: "top 80%" },
+      }
     );
-    return () => timers.forEach(clearTimeout);
-  }, [isUploading]);
+  }, [ref]);
 
   /* drag handlers */
   const onDragOver  = useCallback(e => { e.preventDefault(); setDragOver(true); }, []);
@@ -79,57 +57,67 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
-    if (file) { setPdfFile(file); setShowDownload(false); setUploadStatus({ message: "", type: "" }); }
+    if (file) {
+      setPdfFile(file);
+      setShowDownload(false);
+      setUploadStatus({ message: "", type: "" });
+    }
   };
 
+  /* Sanitise batch year input — digits only, max 4 chars */
+  const handleBatchYearChange = (e) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+    setBatchYear(val);
+  };
+
+  /* Normalise to 2-digit form before sending — "2022" → "22", "22" → "22" */
+  const normalisedBatchYear = batchYear.length === 4
+    ? batchYear.slice(2)
+    : batchYear;
+
+  const canProcess = pdfFile && normalisedBatchYear.length === 2;
+
   const handleUpload = async () => {
-    if (!pdfFile) return;
+    if (!canProcess) return;
     setIsUploading(true);
     setShowDownload(false);
-    setUploadStatus({ message: "Initialising pipeline…", type: "loading" });
+    setUploadStatus({ message: "Processing your file…", type: "loading" });
     startTimeRef.current = Date.now();
 
     try {
       const form = new FormData();
       form.append("pdf_file", pdfFile);
+      form.append("batch_year", normalisedBatchYear);           // ← NEW
       if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
-      const res = await fetch("http://127.0.0.1:8000/upload", {
-        method: "POST",
-        body: form,  // No headers!
-      });
+      const res  = await fetch("${import.meta.env.VITE_API_URL}/upload", { method: "POST", body: form });
       const data = await res.json();
       const ms   = Date.now() - startTimeRef.current;
 
       if (!res.ok) {
         setUploadStatus({ message: data.detail || "Processing failed. Please retry.", type: "error" });
-        setActiveStep(-1);
         return;
       }
 
-      /* finish pipeline animation */
-      setDoneSteps(PIPELINE.map((_, i) => i));
-      setActiveStep(-1);
       setElapsed((ms / 1000).toFixed(2));
       setSessionId(data.session_id);
       setShowDownload(true);
-      setUploadStatus({ message: "Pipeline complete — your Excel file is ready.", type: "success" });
+      setUploadStatus({ message: "Your Excel file is ready to download.", type: "success" });
     } catch {
       setUploadStatus({ message: "Network error. Check your connection and retry.", type: "error" });
-      setActiveStep(-1);
     } finally {
       setIsUploading(false);
     }
   };
 
   const handleDownload = () => {
-    fetch(`http://127.0.0.1:8000/download/${sessionId}`)
+    fetch(`${import.meta.env.VITE_API_URL}/download/${sessionId}`)
       .then(r => r.blob())
       .then(blob => {
         const url = URL.createObjectURL(blob);
-        const a   = document.createElement("a");
-        a.href     = url;
-        a.download = `KTU_Results_${sessionId}.xlsx`;
+        const a   = Object.assign(document.createElement("a"), {
+          href: url, download: `KTU_Results_${sessionId}.xlsx`
+        });
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
@@ -139,10 +127,9 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
   const handleReset = () => {
     setPdfFile(null);
+    setBatchYear("");                                            // ← NEW
     setShowDownload(false);
     setUploadStatus({ message: "", type: "" });
-    setActiveStep(-1);
-    setDoneSteps([]);
     setElapsed(null);
     setSessionId(null);
     setShowExtraSheet(false);
@@ -150,379 +137,321 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const getStepStatus = (i) => {
-    if (doneSteps.includes(i)) return "done";
-    if (activeStep === i)       return "active";
-    return "idle";
-  };
-
   return (
-    <section className="upload-section" ref={ref || sectionRef}>
-      <div className="upload-inner">
+    <section className="us" ref={ref || sectionRef} id="upload">
+      <div className="us__container">
 
-        {/* ── HEADER ── */}
-        <div className="upload-header">
-          <div className="upload-header-left">
-            <div className="upload-eyebrow">
-              <span className="upload-eyebrow-line" />
-              Command Center
-              <span className="upload-eyebrow-line" />
-            </div>
-            <h2 className="upload-title">
-              Drop your PDF.<br />
-              <em>Receive structured brilliance.</em>
-            </h2>
-            <p className="upload-subtitle">
-              Upload any KTU result PDF and our five-stage processing pipeline
-              transforms it into a clean, download-ready Excel file — in under a second.
-            </p>
-          </div>
-          <div className="upload-header-stats">
-            <div className="upload-stat">
-              <div className="upload-stat-num">0.8s</div>
-              <div className="upload-stat-label">Avg. Parse Time</div>
-            </div>
-            <div className="upload-stat">
-              <div className="upload-stat-num">100%</div>
-              <div className="upload-stat-label">Accuracy</div>
-            </div>
-          </div>
+        {/* ── Section label ── */}
+        <div className="us__eyebrow us-animate">
+          <span className="us__eyebrow-line" />
+          Upload Your PDF
+          <span className="us__eyebrow-line" />
         </div>
 
-        {/* ── WORKSPACE ── */}
-        <div className="upload-workspace">
+        {/* ── Headline ── */}
+        <h2 className="us__headline us-animate">
+          Drop your result PDF.<br />
+          <span className="us__headline-accent">Get your Excel instantly.</span>
+        </h2>
+        <p className="us__sub us-animate">
+          Our parser reads any KTU semester result PDF and converts it into a
+          clean, structured Excel sheet — ready to share or archive in seconds.
+        </p>
 
-          {/* LEFT — Drop zone + actions */}
-          <div className="upload-dropzone-wrap">
-            <div
-              ref={dropzoneRef}
-              className={`upload-dropzone ${dragOver ? "drag-over" : ""}`}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-              onClick={() => !isUploading && fileInputRef.current?.click()}
-              style={{ cursor: isUploading ? "not-allowed" : "pointer" }}
-            >
-              {/* corner brackets */}
-              <span className="corner corner-tl" />
-              <span className="corner corner-tr" />
-              <span className="corner corner-bl" />
-              <span className="corner corner-br" />
+        {/* ══════════════════════ UPLOAD CARD ══════════════════════ */}
+        <div className="us__card us-animate">
 
+          {/* ── Drop zone ── */}
+          <div
+            className={`us__drop${dragOver ? " us__drop--over" : ""}${pdfFile ? " us__drop--loaded" : ""}`}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            onClick={() => !isUploading && fileInputRef.current?.click()}
+            style={{ cursor: isUploading ? "default" : "pointer" }}
+          >
+            <input
+              type="file"
+              accept=".pdf"
+              className="us__hidden-input"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
+
+            {/* Corner brackets */}
+            <span className="us__corner us__corner--tl" />
+            <span className="us__corner us__corner--tr" />
+            <span className="us__corner us__corner--bl" />
+            <span className="us__corner us__corner--br" />
+
+            {/* Icon */}
+            <div className="us__drop-icon">
+              {isUploading ? (
+                <svg className="us__icon-spin" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+              ) : pdfFile ? (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              ) : (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <polyline points="16 16 12 12 8 16"/>
+                  <line x1="12" y1="12" x2="12" y2="21"/>
+                  <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                </svg>
+              )}
+            </div>
+
+            {/* Copy */}
+            {pdfFile ? (
+              <div className="us__drop-copy">
+                <p className="us__drop-title">File ready</p>
+                <p className="us__drop-hint">Drop a new PDF to replace, or press <strong>Process</strong> below</p>
+              </div>
+            ) : (
+              <div className="us__drop-copy">
+                <p className="us__drop-title">
+                  {dragOver ? "Release to upload" : "Drag & drop your PDF here"}
+                </p>
+                <p className="us__drop-hint">
+                  or <span className="us__drop-browse">click to browse</span> — KTU format, any semester
+                </p>
+                <div className="us__drop-pills">
+                  <span className="us__pill">.pdf</span>
+                  <span className="us__pill">KTU Format</span>
+                  <span className="us__pill">Any Semester</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Selected file row ── */}
+          {pdfFile && (
+            <div className="us__file-row">
+              <div className="us__file-badge">PDF</div>
+              <div className="us__file-info">
+                <span className="us__file-name">{pdfFile.name}</span>
+                <span className="us__file-meta">{formatBytes(pdfFile.size)} · application/pdf</span>
+              </div>
+              <button
+                className="us__file-remove"
+                onClick={handleReset}
+                title="Remove file"
+                aria-label="Remove file"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6"  y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* ── Batch year input ── */}
+          <div className="us__batch-row">
+            <div className="us__batch-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
+            <div className="us__batch-body">
+              <label className="us__batch-label" htmlFor="batchYear">
+                Batch year
+                <span className="us__batch-required">required</span>
+              </label>
+              <p className="us__batch-sub">
+                Only students from this admission year will appear in the Excel.
+                Seniors writing arrears are excluded automatically.
+              </p>
+            </div>
+            <input
+              id="batchYear"
+              type="text"
+              inputMode="numeric"
+              className={`us__batch-input${normalisedBatchYear.length === 2 ? " us__batch-input--ok" : ""}`}
+              placeholder="e.g. 22"
+              value={batchYear}
+              onChange={handleBatchYearChange}
+              maxLength={4}
+              disabled={isUploading}
+            />
+          </div>
+
+          {/* ── Internal marks toggle ── */}
+          <button
+            type="button"
+            className={`us__toggle${showExtraSheet ? " us__toggle--on" : ""}`}
+            onClick={() => { setShowExtraSheet(v => !v); if (showExtraSheet) setExcelFile(null); }}
+          >
+            <div className="us__toggle-left">
+              <div className="us__toggle-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <path d="M3 9h18M9 21V9"/>
+                </svg>
+              </div>
+              <div>
+                <p className="us__toggle-label">Attach internal marks PDF</p>
+                <p className="us__toggle-sub">Optional · merges internal marks into output Excel</p>
+              </div>
+            </div>
+            <div className="us__switch">
+              <div className="us__switch-thumb" />
+            </div>
+          </button>
+
+          {/* Internal marks file picker */}
+          {showExtraSheet && (
+            <label className="us__extra-drop">
               <input
                 type="file"
                 accept=".pdf"
-                className="upload-input-hidden"
-                ref={fileInputRef}
-                onChange={handleFileChange}
+                style={{ display: "none" }}
+                onChange={e => setExcelFile(e.target.files?.[0] || null)}
               />
-
-              <div className="upload-icon-wrap">
-                <div className="upload-icon-ring" />
-                <div className="upload-icon-ring" />
-                <div className="upload-icon-ring" />
-                <div className="upload-icon-core">
-                  {isUploading ? (
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                    </svg>
-                  ) : pdfFile ? (
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                      <polyline points="14 2 14 8 20 8"/>
-                      <line x1="16" y1="13" x2="8" y2="13"/>
-                      <line x1="16" y1="17" x2="8" y2="17"/>
-                    </svg>
-                  ) : (
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="16 16 12 12 8 16"/>
-                      <line x1="12" y1="12" x2="12" y2="21"/>
-                      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
-                    </svg>
-                  )}
-                </div>
-              </div>
-
-              {pdfFile ? (
-                <>
-                  <div className="upload-dropzone-title">File loaded & ready</div>
-                  <div className="upload-dropzone-sub">
-                    Click <span>Process File</span> below to start the pipeline,<br />
-                    or drop a new PDF to replace.
+              {excelFile ? (
+                <div className="us__extra-file">
+                  <div className="us__file-badge us__file-badge--sm">PDF</div>
+                  <div className="us__file-info">
+                    <span className="us__file-name">{excelFile.name}</span>
+                    <span className="us__file-meta">{formatBytes(excelFile.size)} · internal marks</span>
                   </div>
-                </>
-              ) : (
-                <>
-                  <div className="upload-dropzone-title">
-                    {dragOver ? "Release to load" : "Drag & drop your PDF here"}
-                  </div>
-                  <div className="upload-dropzone-sub">
-                    or <span>click anywhere to browse</span> your files
-                  </div>
-                  <div className="upload-file-types">
-                    <span className="file-type-pill">.pdf</span>
-                    <span className="file-type-pill">KTU Format</span>
-                    <span className="file-type-pill">Any Semester</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Selected file strip */}
-            {pdfFile && (
-              <div className="upload-file-selected" style={{marginTop: '1rem'}}>
-                <div className="file-selected-icon">PDF</div>
-                <div className="file-selected-info">
-                  <div className="file-selected-name">{pdfFile.name}</div>
-                  <div className="file-selected-meta">
-                    {formatBytes(pdfFile.size)} · application/pdf
-                  </div>
-                </div>
-                <div className="file-selected-check">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                </div>
-              </div>
-            )}
-
-            {/* ── EXTRA SHEET TOGGLE ── */}
-            <div className="extra-sheet-toggle-wrap" style={{ marginTop: "1rem" }}>
-              <button
-                className={`extra-sheet-toggle ${showExtraSheet ? "active" : ""}`}
-                onClick={() => { setShowExtraSheet(v => !v); if (showExtraSheet) setExcelFile(null); }}
-                type="button"
-              >
-                <div className="extra-toggle-left">
-                  <div className="extra-toggle-icon">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <rect x="3" y="3" width="18" height="18" rx="2"/>
-                      <path d="M3 9h18M9 21V9"/>
-                    </svg>
-                  </div>
-                  <div className="extra-toggle-body">
-                    <span className="extra-toggle-label">Attach student details sheet</span>
-                    <span className="extra-toggle-sub">Optional · Adds internal marks to output for merged Excel</span>
-                  </div>
-                </div>
-                <div className={`extra-toggle-switch ${showExtraSheet ? "on" : ""}`}>
-                  <div className="toggle-thumb" />
-                </div>
-              </button>
-
-              {showExtraSheet && (
-                <div className="extra-sheet-picker">
-                  <label className="extra-sheet-dropzone">
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      style={{ display: "none" }}
-                      onChange={e => setExcelFile(e.target.files?.[0] || null)}
-                    />
-                    {excelFile ? (
-                      <div className="extra-file-selected">
-                        <div className="extra-file-icon">PDF</div>
-                        <div className="extra-file-info">
-                          <div className="extra-file-name">{excelFile.name}</div>
-                          <div className="extra-file-meta">{formatBytes(excelFile.size)} · internal marks PDF</div>
-                        </div>
-                        <div className="extra-file-check">
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="extra-dropzone-empty">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="17 8 12 3 7 8"/>
-                          <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        <span>Click to browse <strong>internal marks .pdf</strong></span>
-                      </div>
-                    )}
-                  </label>
-                  <p className="extra-sheet-hint">
-                    Internal marks PDF from your college portal
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Process button */}
-            <button
-              className="upload-process-btn"
-              style={{ marginTop: "1rem" }}
-              onClick={handleUpload}
-              disabled={!pdfFile || isUploading}
-            >
-              {isUploading ? (
-                <><span className="btn-spinner" /> Running pipeline…</>
-              ) : (
-                <>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                  </svg>
-                  Launch Processing Pipeline
-                </>
-              )}
-            </button>
-
-            {/* Status bar */}
-            {uploadStatus.message && (
-              <div className={`upload-status-bar ${uploadStatus.type}`} style={{marginTop:'1rem'}}>
-                <div className="status-bar-icon">
-                  {uploadStatus.type === "success" && (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                      <polyline points="22 4 12 14.01 9 11.01"/>
-                    </svg>
-                  )}
-                  {uploadStatus.type === "error" && (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="12" cy="12" r="10"/>
-                      <line x1="12" y1="8" x2="12" y2="12"/>
-                      <line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </svg>
-                  )}
-                  {uploadStatus.type === "loading" && <span className="btn-spinner" style={{borderColor:'rgba(96,165,250,0.3)', borderTopColor:'#60a5fa'}}/>}
-                </div>
-                <span className="status-bar-text">{uploadStatus.message}</span>
-              </div>
-            )}
-
-            {/* Download panel */}
-            {showDownload && (
-              <div className="download-panel" style={{marginTop:'1rem'}}>
-                <div className="download-header">
-                  <div className="download-success-icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <div className="us__extra-check">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
                       <polyline points="20 6 9 17 4 12"/>
                     </svg>
                   </div>
-                  <div>
-                    <div className="download-title">Output ready</div>
-                    <div className="download-sub">Processed in {elapsed}s · Zero data loss</div>
-                  </div>
                 </div>
-
-                <div className="download-file-row">
-                  <div className="download-file-icon">XLSX</div>
-                  <div className="download-file-name">KTU_Results_{sessionId?.slice(0,8)}.xlsx</div>
-                  <button className="download-btn" onClick={handleDownload}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Download
-                  </button>
-                </div>
-
-                <button className="download-reset" onClick={handleReset}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="1 4 1 10 7 10"/>
-                    <path d="M3.51 15a9 9 0 1 0 .49-3.29"/>
+              ) : (
+                <div className="us__extra-empty">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
-                  Process another file
+                  <span>Click to browse <strong>internal marks PDF</strong></span>
+                </div>
+              )}
+            </label>
+          )}
+
+          {/* ── Divider ── */}
+          <div className="us__divider" />
+
+          {/* ── Process button ── */}
+          <button
+            className="us__btn-process"
+            onClick={handleUpload}
+            disabled={!canProcess || isUploading}
+          >
+            {isUploading ? (
+              <>
+                <span className="us__spinner" />
+                Processing…
+              </>
+            ) : (
+              <>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                Process PDF
+              </>
+            )}
+          </button>
+
+          {/* ── Validation hint — shown when PDF is selected but year is missing ── */}
+          {pdfFile && normalisedBatchYear.length !== 2 && (
+            <p className="us__batch-hint">
+              ↑ Enter the 2-digit batch year to continue (e.g. <strong>22</strong> for the 2022 batch)
+            </p>
+          )}
+
+          {/* ── Status message ── */}
+          {uploadStatus.message && (
+            <div className={`us__status us__status--${uploadStatus.type}`}>
+              <span className="us__status-icon">
+                {uploadStatus.type === "success" && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                )}
+                {uploadStatus.type === "error" && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                )}
+                {uploadStatus.type === "loading" && (
+                  <span className="us__spinner us__spinner--blue" />
+                )}
+              </span>
+              {uploadStatus.message}
+            </div>
+          )}
+
+          {/* ── Download panel ── */}
+          {showDownload && (
+            <div className="us__download">
+              <div className="us__download-left">
+                <div className="us__download-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="us__download-title">Ready — processed in {elapsed}s</p>
+                  <p className="us__download-file">KTU_Results_{sessionId?.slice(0, 8)}.xlsx</p>
+                </div>
+              </div>
+              <div className="us__download-actions">
+                <button className="us__btn-download" onClick={handleDownload}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Download Excel
+                </button>
+                <button className="us__btn-reset" onClick={handleReset}>
+                  Process another
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* RIGHT PANEL */}
-          <div className="upload-panel">
-
-            {/* Pipeline card */}
-            <div className="pipeline-card">
-              <div className="pipeline-title">
-                <span className="pipeline-title-dot" />
-                Processing Pipeline
-              </div>
-
-              <div className="pipeline-steps">
-                {PIPELINE.map((step, i) => {
-                  const status = getStepStatus(i);
-                  return (
-                    <div key={step.id} className={`pipeline-step ${status}`}>
-                      <div className="step-node">
-                        {status === "done" ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                        ) : status === "active" ? (
-                          <>
-                            <span className="step-pulse"/>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                              <circle cx="12" cy="12" r="5"/>
-                            </svg>
-                          </>
-                        ) : (
-                          String(i + 1).padStart(2, "0")
-                        )}
-                      </div>
-                      <div className="step-body">
-                        <div className="step-name">{step.label}</div>
-                        <div className="step-detail">
-                          {status === "done"   ? "Completed ✓" :
-                           status === "active" ? step.detail   :
-                           "Waiting…"}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
+          )}
 
-            {/* Metrics card */}
-            <div className="metrics-card">
-              <div className="metric-item">
-                <div className="metric-val green">
-                  {elapsed ? `${elapsed}s` : "—"}
-                </div>
-                <div className="metric-label">Process Time</div>
-              </div>
-              <div className="metric-item">
-                <div className="metric-val blue">
-                  {pdfFile ? formatBytes(pdfFile.size) : "—"}
-                </div>
-                <div className="metric-label">Input Size</div>
-              </div>
-              <div className="metric-item">
-                <div className="metric-val amber">
-                  {showDownload ? "100%" : "—"}
-                </div>
-                <div className="metric-label">Data Fidelity</div>
-              </div>
-              <div className="metric-item">
-                <div className="metric-val purple">
-                  {showDownload ? "5" : "—"}
-                </div>
-                <div className="metric-label">Stages Run</div>
-              </div>
-            </div>
-
-          </div>
         </div>
+        {/* end card */}
 
-        {/* ── TRUST BAR ── */}
-        <div className="upload-trust-bar">
+        {/* ── Trust strip ── */}
+        <div className="us__trust us-animate">
           {[
-            { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>, label: "JWT Authenticated" },
-            { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>, label: "Encrypted in Transit" },
-            { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.29"/></svg>, label: "Zero Data Retention" },
-            { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, label: "KTU Format Native" },
-            { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, label: "Live Pipeline Tracking" },
+            { label: "Firebase authenticated",
+              icon: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/> },
+            { label: "Encrypted in transit",
+              icon: <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></> },
+            { label: "Zero data retention",
+              icon: <><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.29"/></> },
+            { label: "KTU native format",
+              icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></> },
           ].map((item, i, arr) => (
-            <>
-              <div key={item.label} className="trust-item">
-                {item.icon}
+            <Fragment key={item.label}>
+              <div className="us__trust-item">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  {item.icon}
+                </svg>
                 {item.label}
               </div>
-              {i < arr.length - 1 && <span key={`sep-${i}`} className="trust-sep" />}
-            </>
+              {i < arr.length - 1 && <span className="us__trust-dot" />}
+            </Fragment>
           ))}
         </div>
 
