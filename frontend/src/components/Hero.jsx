@@ -10,12 +10,6 @@ function Hero({ onScrollToUpload }) {
 
       <div className="hero__container">
 
-        {/* Badge */}
-        <div className="hero__badge">
-          <span className="hero__badge-dot" />
-          Built for AISAT Faculty &nbsp;·&nbsp; Powered by KTU Data
-        </div>
-
         {/* Headline */}
         <h1 className="hero__headline">
           Turn KTU Result PDFs into
@@ -42,37 +36,8 @@ function Hero({ onScrollToUpload }) {
             </svg>
             Process Your Results
           </button>
-
-          <button
-            className="hero__btn-ghost"
-            onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
-          >
-            See how it works
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="5" y1="12" x2="19" y2="12"/>
-              <polyline points="12 5 19 12 12 19"/>
-            </svg>
-          </button>
         </div>
 
-        {/* Trust row */}
-        <div className="hero__trust">
-          {[
-            { icon: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>, label: "Firebase secured" },
-            { icon: <polyline points="20 6 9 17 4 12"/>, label: "Zero data retention" },
-            { icon: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>, label: "Results in under 5s" },
-          ].map((item, i) => (
-            <span key={i} className="hero__trust-item">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                {item.icon}
-              </svg>
-              {item.label}
-              {i < 2 && <span className="hero__trust-sep">·</span>}
-            </span>
-          ))}
-        </div>
 
         {/* ═══════════ PRODUCT MOCKUP ═══════════ */}
         <div className="hero__mockup-wrap">

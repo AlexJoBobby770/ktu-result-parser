@@ -75,12 +75,6 @@ function Navbar({ currentUser, backendStatus, onLogout, uploadSectionRef }) {
           {/* ─── Right-side cluster ───────────────────────────── */}
           <div className="nb__right">
 
-            {/* Backend status pill */}
-            <div className={`nb__pill${isLive ? " nb__pill--live" : " nb__pill--off"}`}>
-              <span className="nb__pill-dot" />
-              {isLive ? "API Live" : "Offline"}
-            </div>
-
             {/* Primary CTA */}
             <button className="nb__cta" onClick={scrollToUpload}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none"

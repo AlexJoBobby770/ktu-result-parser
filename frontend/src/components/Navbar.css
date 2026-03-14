@@ -19,7 +19,7 @@
   --nb-border:       #e8e8e8;
   --nb-bg:           #ffffff;
   --nb-shadow:       0 1px 0 var(--nb-border);
-  --nb-h:            64px;
+  --nb-h:            82px;
 
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -38,12 +38,12 @@
 
 /* ── Spacer ──────────────────────────────────────────────── */
 .nb__spacer {
-  height: 64px;          /* same as --nb-h */
+  height: 82px;          /* same as --nb-h */
 }
 
 /* ── Inner wrapper ───────────────────────────────────────── */
 .nb__wrap {
-  max-width: 1200px;
+  max-width: relative;
   margin: 0 auto;
   padding: 0 28px;
   height: 100%;
