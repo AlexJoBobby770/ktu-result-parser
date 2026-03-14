@@ -1,287 +1,143 @@
-import { useEffect, useRef } from "react";
-import { gsap } from "gsap";
 import "./Hero.css";
 
-/* ── STARFIELD DATA ── */
-const STARS = Array.from({ length: 80 }, (_, i) => ({
-  id: i,
-  top:    `${Math.random() * 100}%`,
-  left:   `${Math.random() * 100}%`,
-  size:   Math.random() * 2 + 0.5,
-  dur:    `${Math.random() * 4 + 2}s`,
-  delay:  `${Math.random() * 5}s`,
-  minOp:  (Math.random() * 0.15 + 0.05).toFixed(2),
-  maxOp:  (Math.random() * 0.5 + 0.3).toFixed(2),
-}));
-
-/* ── STREAM LOG LINES ── */
-const STREAM_LINES = [
-  { time: "00:00:01", module: "INGEST",  msg: "PDF structure validated — 4 pages detected",    ok: "OK" },
-  { time: "00:00:02", module: "EXTRACT", msg: "Text layer extracted — 2,847 tokens",            ok: "OK" },
-  { time: "00:00:03", module: "PARSE",   msg: "12 subjects identified across 4 semesters",      ok: "OK" },
-  { time: "00:00:03", module: "COMPILE", msg: "Row schema built — 6 columns mapped",            ok: "OK" },
-  { time: "00:00:04", module: "EXPORT",  msg: "XLSX generated — KTU_Results_a3f7.xlsx ready",   ok: "OK" },
-  { time: "00:00:05", module: "SYSTEM",  msg: "Session closed — zero data retained",            ok: "OK" },
-];
-
-/* ── TICKER ITEMS (duplicated for infinite scroll) ── */
-const TICKER = [
-  {  label: "Avg Processing Time", val: "0.8s" },
-  {  label: "Grade Accuracy",       val: "100%" },
-  {  label: "Encryption",           val: "AES-256" },
-  {  label: "Formats Supported",    val: "KTU PDF" },
-  {  label: "Output Format",        val: "XLSX / Excel" },
-  {  label: "Auth Protocol",        val: "Firebase" },
-  {  label: "Data Retention",       val: "Zero" },
-  { icon: "🚀", label: "Pipeline Stages",      val: "5-Step" },
-];
-
-export default function Hero({ onScrollToUpload }) {
-  const heroRef    = useRef(null);
-  const chipRef    = useRef(null);
-  const headlineRef = useRef(null);
-
-  useEffect(() => {
-    const ctx = gsap.context(() => {
-      const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
-
-      /* 1. Chip entrance */
-      tl.to(".hero-chip",        { opacity: 1, y: 0, duration: 0.7 }, 0.2)
-
-      /* 2. Headline lines cascade */
-        .to(".hero-headline",      { opacity: 1, duration: 0 }, 0.55)
-        .to(".hero-headline-inner",{ y: "0%", duration: 0.9, stagger: 0.12, ease: "power4.out" }, 0.55)
-
-      /* 3. Desc + CTA */
-        .to(".hero-desc",          { opacity: 1, y: 0, duration: 0.7 }, 1.1)
-        .to(".hero-cta-row",       { opacity: 1, y: 0, duration: 0.7 }, 1.3)
-        .to(".hero-social-proof",  { opacity: 1, y: 0, duration: 0.7 }, 1.45)
-
-      /* 4. Right viz card */
-        .to(".hero-right",         { opacity: 1, x: 0, duration: 1.0, ease: "power2.out" }, 0.7)
-
-      /* 5. Ticker bar */
-        .to(".hero-ticker",        { opacity: 1, duration: 0.6 }, 1.6);
-
-      /* Initial positions */
-      gsap.set(".hero-chip",        { y: 12 });
-      gsap.set(".hero-headline-inner", { y: "100%" });
-      gsap.set(".hero-desc",        { y: 16 });
-      gsap.set(".hero-cta-row",     { y: 16 });
-      gsap.set(".hero-social-proof",{ y: 16 });
-      gsap.set(".hero-right",       { x: 40 });
-
-    }, heroRef);
-
-    return () => ctx.revert();
-  }, []);
-
-  /* re-animate cells on loop */
-  useEffect(() => {
-    const cells = document.querySelectorAll(".viz-cell");
-    const cycleAnim = () => {
-      cells.forEach((cell) => {
-        gsap.fromTo(cell,
-          { opacity: 0, scale: 0.7 },
-          { opacity: 1, scale: 1, duration: 0.3,
-            delay: parseFloat(cell.style.getPropertyValue("--cd") || "0") }
-        );
-      });
-    };
-    cycleAnim();
-    const id = setInterval(cycleAnim, 5000);
-    return () => clearInterval(id);
-  }, []);
-
+function Hero({ onScrollToUpload }) {
   return (
-    <section className="hero" ref={heroRef}>
+    <section className="hero">
+      {/* ── Background decorations ── */}
+      <div className="hero__grid" aria-hidden="true" />
+      <div className="hero__glow hero__glow--l" aria-hidden="true" />
+      <div className="hero__glow hero__glow--r" aria-hidden="true" />
 
-      {/* ── STARFIELD ── */}
-      <div className="hero-starfield" aria-hidden>
-        {STARS.map(s => (
-          <span key={s.id} className="star" style={{
-            top: s.top, left: s.left,
-            width: s.size + "px", height: s.size + "px",
-            "--dur":    s.dur,
-            "--delay":  s.delay,
-            "--min-op": s.minOp,
-            "--max-op": s.maxOp,
-          }} />
-        ))}
-      </div>
+      <div className="hero__container">
 
-      {/* ── AURORA BLOBS ── */}
-      <div className="hero-aurora" aria-hidden>
-        <div className="aurora-1" />
-        <div className="aurora-2" />
-        <div className="aurora-3" />
-      </div>
+        {/* Headline */}
+        <h1 className="hero__headline">
+          Turn KTU Result PDFs into
+          <br />
+          <span className="hero__headline-accent">Clean Excel Sheets</span>
+          <br />
+          in Seconds.
+        </h1>
 
-      {/* ── GRID ── */}
-      <div className="hero-grid" aria-hidden />
+        <p className="hero__sub">
+          Upload a KTU semester result PDF and instantly receive a structured,
+          ready-to-use Excel workbook — with internal marks merged automatically.
+          No manual copy-paste. No formatting headaches. Ever.
+        </p>
 
-
-      {/* ── MAIN CONTENT ── */}
-      <div className="hero-content">
-
-        {/* LEFT COLUMN */}
-        <div className="hero-left">
-
-
-          {/* Headline */}
-          <h1 className="hero-headline">
-            <span className="hero-headline-line">
-              <span className="hero-headline-inner">Your KTU results.</span>
-            </span>
-            <span className="hero-headline-line">
-              <span className="hero-headline-inner">
-                <em>Structured.</em>
-              </span>
-            </span>
-            <span className="hero-headline-line">
-              <span className="hero-headline-inner">
-                In{" "}
-                <span className="accent-word">under a second</span>
-              </span>
-            </span>
-          </h1>
-
-          {/* Description */}
-          <p className="hero-desc">
-            Tired of manually creating Excel sheet from result files? Our <strong>5-stage intelligent pipeline</strong> extracts,
-            parses, and compiles every subject, grade, and credit into a{" "}
-            <strong>clean Excel spreadsheet</strong> — ready to download and analyse.
-          </p>
-
-          {/* CTA row */}
-          <div className="hero-cta-row">
-            <button className="btn-hero-primary" onClick={onScrollToUpload}>
-              Upload Your PDF
-              <svg className="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="7" y1="17" x2="17" y2="7" />
-                <polyline points="7 7 17 7 17 17" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Social proof */}
-          <div className="hero-social-proof">
-            <div className="proof-avatars">
-              {["JD","DM","TV","NT"].map(initials => (
-                <div key={initials} className="proof-avatar">{initials}</div>
-              ))}
-            </div>
-            <div className="proof-text">
-              <strong>6+ Faculties</strong> across Kerala<br />
-              have already processed their results
-            </div>
-          </div>
-
+        {/* CTA buttons */}
+        <div className="hero__cta-row">
+          <button className="hero__btn-primary" onClick={onScrollToUpload}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <polyline points="16 16 12 12 8 16"/>
+              <line x1="12" y1="12" x2="12" y2="21"/>
+              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+            </svg>
+            Process Your Results
+          </button>
         </div>
 
-        {/* RIGHT COLUMN — Visualization */}
-        <div className="hero-right">
-          <div className="hero-viz">
 
+        {/* ═══════════ PRODUCT MOCKUP ═══════════ */}
+        <div className="hero__mockup-wrap">
+          <div className="hero__mockup">
 
+            {/* Chrome bar */}
+            <div className="hero__chrome">
+              <div className="hero__chrome-dots">
+                <span className="hero__dot" style={{ background: "#ff5f57" }} />
+                <span className="hero__dot" style={{ background: "#febc2e" }} />
+                <span className="hero__dot" style={{ background: "#28c840" }} />
+              </div>
+              <div className="hero__chrome-pill">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                aisat-ktu-parser.app
+              </div>
+              <div className="hero__chrome-r">
+                <span /><span /><span />
+              </div>
+            </div>
 
-            {/* Main card */}
-            <div className="viz-card">
+            {/* Toolbar */}
+            <div className="hero__toolbar">
+              <div className="hero__tab hero__tab--active">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                S5_CS_Results.xlsx
+              </div>
+              <div className="hero__tab">Summary</div>
+              <div className="hero__toolbar-flex" />
+              <div className="hero__dl-btn">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </div>
+            </div>
 
-              {/* Top bar */}
-              <div className="viz-topbar">
-                <div className="viz-dots">
-                  <span className="viz-dot"/><span className="viz-dot"/><span className="viz-dot"/>
-                </div>
-                <div className="viz-title-bar">pipeline.live</div>
-                <div className="viz-status-pill">
-                  <span className="chip-live-dot"/>
-                  RUNNING
-                </div>
+            {/* Spreadsheet */}
+            <div className="hero__sheet">
+              {/* Header row */}
+              <div className="hero__row hero__row--head">
+                <div className="hero__cell hero__cell--n">#</div>
+                {["Roll No", "Name", "CS301", "CS303", "CS305", "MA301", "EC301", "SGPA", "Result"].map(h => (
+                  <div key={h} className="hero__cell hero__cell--h">{h}</div>
+                ))}
               </div>
 
-              {/* Transformation scene */}
-              <div className="viz-scene">
-
-                <div className="viz-transform-row">
-
-                  {/* PDF input */}
-                  <div className="viz-pdf-card">
-                    <div className="viz-pdf-header">
-                      <span className="viz-pdf-badge">PDF</span>
-                      <span className="viz-pdf-name">kturesult.pdf</span>
-                    </div>
-                    <div className="viz-lines">
-                      {[100, 85, 92, 70, 88, 60, 75, 95].map((w, i) => (
-                        <div key={i} className="viz-line"
-                          style={{ width: w + "%", "--d": `${i * 0.3}s` }} />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="viz-arrow-col">
-                    <div className="viz-arrow-track">
-                      <div className="viz-arrow-ring"/>
-                      <div className="viz-arrow-ring"/>
-                      <div className="viz-arrow-icon">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <line x1="5" y1="12" x2="19" y2="12"/>
-                          <polyline points="12 5 19 12 12 19"/>
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="viz-arrow-label">5 stages</div>
-                  </div>
-
-                  {/* XLSX output */}
-                  <div className="viz-xlsx-card">
-                    <div className="viz-xlsx-header">
-                      <span className="viz-xlsx-badge">XLSX</span>
-                      <span className="viz-pdf-name">results.xlsx</span>
-                    </div>
-                    <div className="viz-cells">
-                      {Array.from({ length: 18 }, (_, i) => (
-                        <div key={i} className={`viz-cell ${i < 3 ? "header-cell" : ""}`}
-                          style={{ "--cd": `${i * 0.08}s` }} />
-                      ))}
-                    </div>
-                  </div>
-
-                </div>
-
-                {/* Log stream */}
-                <div className="viz-stream">
-                  {[...STREAM_LINES, ...STREAM_LINES].map((line, i) => (
-                    <div key={i} className="stream-row" style={{ "--sr": `${(i % STREAM_LINES.length) * 1.3}s` }}>
-                      <span className="stream-time">{line.time}</span>
-                      <span className="stream-module">[{line.module}]</span>
-                      <span className="stream-msg">{line.msg}</span>
-                      <span className="stream-ok">{line.ok}</span>
-                    </div>
+              {/* Data */}
+              {[
+                { n:1, roll:"AIE20CS001", name:"Arun Mathew",    g:["A+","A", "B+","A", "A+"], sgpa:"9.2", pass:true  },
+                { n:2, roll:"AIE20CS002", name:"Bhavya Nair",    g:["A", "A+","A", "B+","A" ], sgpa:"8.9", pass:true  },
+                { n:3, roll:"AIE20CS003", name:"Christy Jose",   g:["B+","B", "A", "A", "B+"], sgpa:"8.4", pass:true  },
+                { n:4, roll:"AIE20CS004", name:"Devika Suresh",  g:["A+","A+","A+","A+","A+"], sgpa:"9.8", pass:true  },
+                { n:5, roll:"AIE20CS005", name:"Edwin Thomas",   g:["C", "B", "C+","B", "C" ], sgpa:"6.1", pass:false },
+                { n:6, roll:"AIE20CS006", name:"Fathima Riyaz",  g:["A", "B+","A", "A", "A" ], sgpa:"8.7", pass:true  },
+                { n:7, roll:"AIE20CS007", name:"George Philip",  g:["B", "B+","B", "B+","B" ], sgpa:"7.6", pass:true  },
+              ].map(row => (
+                <div key={row.n} className={`hero__row${!row.pass ? " hero__row--fail" : ""}`}>
+                  <div className="hero__cell hero__cell--n">{row.n}</div>
+                  <div className="hero__cell hero__cell--mono">{row.roll}</div>
+                  <div className="hero__cell hero__cell--name">{row.name}</div>
+                  {row.g.map((g,i) => (
+                    <div key={i} className={`hero__cell hero__cell--grade hero__grade--${g.replace("+","p")}`}>{g}</div>
                   ))}
+                  <div className="hero__cell hero__cell--sgpa">{row.sgpa}</div>
+                  <div className={`hero__cell hero__cell--result ${row.pass ? "hero__result--pass" : "hero__result--fail"}`}>
+                    {row.pass ? "PASS" : "FAIL"}
+                  </div>
                 </div>
+              ))}
 
+              {/* Status bar */}
+              <div className="hero__statusbar">
+                <span>7 students &nbsp;·&nbsp; Semester 5 &nbsp;·&nbsp; CSE</span>
+                <div className="hero__statusbar-r">
+                  <span className="hero__chip hero__chip--pass">6 Pass</span>
+                  <span className="hero__chip hero__chip--fail">1 Fail</span>
+                  <span>Avg SGPA: 8.39</span>
+                </div>
               </div>
             </div>
           </div>
+          {/* reflection */}
+          <div className="hero__reflection" aria-hidden="true" />
         </div>
-      </div>
 
-      {/* ── TICKER ── */}
-      <div className="hero-ticker">
-        <div className="ticker-track">
-          {[...TICKER, ...TICKER].map((item, i) => (
-            <span key={i} className="ticker-item">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-              <span className="ticker-val">{item.val}</span>
-              <span className="ticker-sep">·</span>
-            </span>
-          ))}
-        </div>
       </div>
-
     </section>
   );
 }
+
+export default Hero;

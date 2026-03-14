@@ -1,18 +1,15 @@
 # backend/main.py
 import os
-import sys
 import uuid
 import shutil
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from pdf_parser import parse_ktu_pdf
-from internal_parser import parse_sessional_pdf
-from excel_generator import generate_external_excel, generate_merged_excel
+from backend.pdf_parser import parse_ktu_pdf
+from backend.internal_parser import parse_sessional_pdf
+from backend.excel_generator import generate_external_excel, generate_merged_excel
 
 app = FastAPI(title="KTU Result Processor API")
 
@@ -81,7 +78,7 @@ async def upload_result(
     external_records = parse_ktu_pdf(ext_path)
 
     # Quick stats
-    from models import PASSING_GRADES
+    from backend.models import PASSING_GRADES
     student_dept    = {}
     student_arrears = {}
     for r in external_records:

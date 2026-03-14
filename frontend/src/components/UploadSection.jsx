@@ -15,6 +15,7 @@ function formatBytes(bytes) {
 const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
   const [pdfFile, setPdfFile]               = useState(null);
   const [batchYear, setBatchYear]           = useState("");       // ← NEW
+
   const [dragOver, setDragOver]             = useState(false);
   const [isUploading, setIsUploading]       = useState(false);
   const [uploadStatus, setUploadStatus]     = useState({ message: "", type: "" });
@@ -91,6 +92,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
       if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
       const res  = await fetch("${import.meta.env.VITE_API_URL}/upload", { method: "POST", body: form });
+
       const data = await res.json();
       const ms   = Date.now() - startTimeRef.current;
 
@@ -187,10 +189,12 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             {/* Icon */}
             <div className="us__drop-icon">
               {isUploading ? (
+
                 <svg className="us__icon-spin" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                 </svg>
               ) : pdfFile ? (
+
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                   <polyline points="14 2 14 8 20 8"/>
@@ -198,6 +202,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                   <line x1="16" y1="17" x2="8" y2="17"/>
                 </svg>
               ) : (
+
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <polyline points="16 16 12 12 8 16"/>
                   <line x1="12" y1="12" x2="12" y2="21"/>
@@ -298,7 +303,10 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                 </svg>
               </div>
               <div>
+
                 <p className="us__toggle-label">Attach internal marks PDF</p>
+                <p className="us__toggle-label">Attach internal marks sheet</p>
+
                 <p className="us__toggle-sub">Optional · merges internal marks into output Excel</p>
               </div>
             </div>
@@ -349,7 +357,9 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
           <button
             className="us__btn-process"
             onClick={handleUpload}
-            disabled={!canProcess || isUploading}
+
+            disabled={!pdfFile || isUploading}
+
           >
             {isUploading ? (
               <>
@@ -372,6 +382,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
               ↑ Enter the 2-digit batch year to continue (e.g. <strong>22</strong> for the 2022 batch)
             </p>
           )}
+
 
           {/* ── Status message ── */}
           {uploadStatus.message && (

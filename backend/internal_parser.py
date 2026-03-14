@@ -1,7 +1,7 @@
 # backend/internal_parser.py
 import re
 import pdfplumber
-from models import InternalRecord
+from backend.models import InternalRecord
 
 
 # Matches the footer course table lines like:

@@ -1,134 +1,188 @@
 import "./Navbar.css";
 import logo from "../assets/ktulogo.png";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 function Navbar({ currentUser, backendStatus, onLogout, uploadSectionRef }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [isDark, setIsDark] = useState(() => localStorage.getItem("theme") !== "light");
+  const [scrolled, setScrolled]       = useState(false);
+  const [dropdownOpen, setDropdown]   = useState(false);
+  const [mobileOpen, setMobile]       = useState(false);
+  const dropdownRef                   = useRef(null);
 
+  /* ── scroll shadow ── */
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-  }, [isDark]);
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
-  const initials = currentUser ? currentUser.slice(0, 2).toUpperCase() : "?";
+  /* ── close dropdown on outside click ── */
+  useEffect(() => {
+    const onOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target))
+        setDropdown(false);
+    };
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, []);
+
+  /* ── close mobile drawer on route change ── */
+  useEffect(() => setMobile(false), [location.pathname]);
+
+  const initials = currentUser
+    ? currentUser.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
+    : "U";
 
   const scrollToUpload = () => {
+    setMobile(false);
     if (location.pathname !== "/") {
       navigate("/");
-      setTimeout(() => uploadSectionRef?.current?.scrollIntoView({ behavior: "smooth" }), 120);
+      setTimeout(() => uploadSectionRef?.current?.scrollIntoView({ behavior: "smooth" }), 130);
     } else {
       uploadSectionRef?.current?.scrollIntoView({ behavior: "smooth" });
     }
   };
 
+  const isLive = backendStatus === "connected";
+
   return (
-    <nav className="nav">
-      <div className="nav-main">
+    <>
+      {/* ══════════════════════════════════════ NAVBAR ══════════════════════════════════════ */}
+      <header className={`nb${scrolled ? " nb--raised" : ""}`}>
+        <div className="nb__wrap">
 
-        {/* ── LOGO ── */}
-        <Link className="nav-logo" to="/">
-          <div className="nav-logo-img-wrap">
-            <img src={logo} alt="AISAT" className="nav-logo-img" />
-            <div className="nav-logo-img-glow" />
-          </div>
-          <div className="nav-logo-divider" />
-          <div className="nav-logo-text">
-            <span className="logo-name">KTU Result Parser</span>
-            <span className="logo-tagline">Result within seconds</span>
-          </div>
-        </Link>
+          {/* ─── Logo ─────────────────────────────────────────── */}
+          <Link to="/" className="nb__logo">
+            <div className="nb__logo-img-box">
+              <img src={logo} alt="AISAT" className="nb__logo-img" />
+            </div>
+            <div className="nb__logo-sep" />
+            <div className="nb__logo-copy">
+              <span className="nb__logo-product">KTU Result Parser</span>
+              <span className="nb__logo-sub">Result within seconds</span>
+            </div>
+          </Link>
 
-        {/* ── NAV LINKS ── */}
-        <div className="nav-links">
-          <div className="nav-item">
-            <button className="nav-link" onClick={scrollToUpload}>
-              Upload
-              <span className="nav-link-underline" />
+          {/* ─── Desktop nav links ────────────────────────────── */}
+          <nav className="nb__links">
+            <button className="nb__link" onClick={scrollToUpload}>Upload</button>
+            <Link   className="nb__link" to="/help">Help &amp; FAQ</Link>
+          </nav>
+
+          {/* ─── Right-side cluster ───────────────────────────── */}
+          <div className="nb__right">
+
+            {/* Primary CTA */}
+            <button className="nb__cta" onClick={scrollToUpload}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <polyline points="16 16 12 12 8 16" />
+                <line x1="12" y1="12" x2="12" y2="21" />
+                <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+              </svg>
+              Upload PDF
             </button>
-          </div>
-          <div className="nav-item">
-            <Link className="nav-link" to="/help">
-              Help and FAQ
-              <span className="nav-link-underline" />
-            </Link>
-          </div>
-        </div>
 
-        <div className="nav-spacer" />
-
-        {/* ── RIGHT ── */}
-        <div className="nav-actions">
-
-
-          <div className="nav-divider" />
-
-          <button className="btn-nav-cta" onClick={scrollToUpload}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="16 16 12 12 8 16" />
-              <line x1="12" y1="12" x2="12" y2="21" />
-              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-            </svg>
-            Upload PDF
-          </button>
-
-          <div className="nav-divider" />
-
-          {/* User badge */}
-          <div className="nav-user-badge">
-            <div className="user-avatar">{initials}</div>
-            <div className="user-info">
-              <span className="user-name">{currentUser || "Account"}</span>
-            </div>
-            <svg className="user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-
-            <div className="user-dropdown">
-              <div className="user-dropdown-header">
-                <div className="user-avatar user-avatar--lg">{initials}</div>
-                <div>
-                  <div className="user-dropdown-name">{currentUser}</div>
-                  <div className="user-dropdown-role">User</div>
-                </div>
-              </div>
-
-              <div className="user-dropdown-divider" />
-
-              <Link className="user-dropdown-item" to="/help">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+            {/* User avatar + dropdown */}
+            <div className="nb__user" ref={dropdownRef}>
+              <button
+                className="nb__avatar-btn"
+                onClick={() => setDropdown((v) => !v)}
+                aria-expanded={dropdownOpen}
+                aria-label="Account"
+              >
+                <span className="nb__avatar">{initials}</span>
+                <svg
+                  className={`nb__chevron${dropdownOpen ? " nb__chevron--up" : ""}`}
+                  width="11" height="11" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
                 </svg>
-                Help 
-              </Link>
-
-              <button className="user-dropdown-item danger" onClick={onLogout}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-                Sign Out
               </button>
+
+              {/* Dropdown panel */}
+              <div className={`nb__drop${dropdownOpen ? " nb__drop--open" : ""}`}>
+                <div className="nb__drop-head">
+                  <div className="nb__drop-avatar">{initials}</div>
+                  <div className="nb__drop-info">
+                    <p className="nb__drop-name">{currentUser || "Account"}</p>
+                    <p className="nb__drop-role">Faculty Member</p>
+                  </div>
+                </div>
+
+                <div className="nb__drop-divider" />
+
+                <Link
+                  className="nb__drop-item"
+                  to="/help"
+                  onClick={() => setDropdown(false)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  Help &amp; FAQ
+                </Link>
+
+                <button
+                  className="nb__drop-item nb__drop-item--danger"
+                  onClick={() => { setDropdown(false); onLogout(); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  Sign Out
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* ─── Mobile hamburger ─────────────────────────────── */}
+          <button
+            className={`nb__burger${mobileOpen ? " nb__burger--open" : ""}`}
+            onClick={() => setMobile((v) => !v)}
+            aria-label="Toggle menu"
+          >
+            <span /><span /><span />
+          </button>
         </div>
 
-        <button className="nav-mobile-toggle" aria-label="Open menu">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="3" y1="6"  x2="21" y2="6"  />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
+        {/* ══ Mobile slide-down drawer ══ */}
+        <div className={`nb__drawer${mobileOpen ? " nb__drawer--open" : ""}`}>
+          <div className="nb__drawer-user">
+            <div className="nb__drop-avatar" style={{ width: 40, height: 40 }}>{initials}</div>
+            <div>
+              <p className="nb__drop-name">{currentUser || "Account"}</p>
+              <p className="nb__drop-role">Faculty Member</p>
+            </div>
+          </div>
 
-      </div>
-    </nav>
+          <div className="nb__drawer-divider" />
+
+          <button className="nb__drawer-link" onClick={scrollToUpload}>Upload</button>
+          <Link   className="nb__drawer-link" to="/help">Help &amp; FAQ</Link>
+
+          <div className="nb__drawer-divider" />
+
+          <button className="nb__drawer-cta"     onClick={scrollToUpload}>Upload PDF</button>
+          <button className="nb__drawer-signout" onClick={() => { setMobile(false); onLogout(); }}>
+            Sign Out
+          </button>
+        </div>
+      </header>
+
+      {/* Spacer so page content starts below the fixed bar */}
+      <div className="nb__spacer" />
+    </>
   );
 }
 
