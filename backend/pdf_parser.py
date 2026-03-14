@@ -1,7 +1,7 @@
 # backend/pdf_parser.py
 import re
 import pdfplumber
-from models import ExternalRecord, get_department
+from backend.models import ExternalRecord, get_department
 
 
 # Regex: matches USN at start of a line

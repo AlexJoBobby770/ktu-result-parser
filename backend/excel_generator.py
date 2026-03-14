@@ -6,7 +6,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from collections import defaultdict
 from datetime import datetime
-from models import PASSING_GRADES, compute_sgpa
+from backend.models import PASSING_GRADES, compute_sgpa
 
 COLLEGE_NAME     = "ALBERTIAN INSTITUTE OF SCIENCE AND TECHNOLOGY (AISAT)"
 COLLEGE_LOCATION = "Kalamassery, Ernakulam, Kerala"

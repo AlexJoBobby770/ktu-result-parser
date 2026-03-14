@@ -14,6 +14,7 @@ function formatBytes(bytes) {
 
 const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
   const [pdfFile, setPdfFile]               = useState(null);
+  const [batchYear, setBatchYear]           = useState("");
   const [dragOver, setDragOver]             = useState(false);
   const [isUploading, setIsUploading]       = useState(false);
   const [uploadStatus, setUploadStatus]     = useState({ message: "", type: "" });
@@ -22,8 +23,6 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
   const [elapsed, setElapsed]               = useState(null);
   const [showExtraSheet, setShowExtraSheet] = useState(false);
   const [excelFile, setExcelFile]           = useState(null);
-  const [batchYear, setBatchYear]           = useState("");
-  const [batchError, setBatchError]         = useState("");
 
   const sectionRef   = useRef(null);
   const fileInputRef = useRef(null);
@@ -65,21 +64,24 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     }
   };
 
-  /* Validate batch year — 4 digit like 2021, 2022, 2023 */
-  const validateBatchYear = (val) => {
-    if (!val.trim()) return "Batch year is required.";
-    if (!/^\d{4}$/.test(val.trim())) return "Enter a 4-digit start year (e.g. 2021, 2022, 2023).";
-    const yr = parseInt(val.trim(), 10);
-    if (yr < 2000 || yr > 2099) return "Enter a valid batch start year (e.g. 2021).";
-    return "";
+  /* Sanitise batch year — digits only, max 4 chars */
+  const handleBatchYearChange = (e) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+    setBatchYear(val);
   };
 
-  const handleUpload = async () => {
-    const yearErr = validateBatchYear(batchYear);
-    if (yearErr) { setBatchError(yearErr); return; }
-    if (!pdfFile) return;
+  /*
+    Normalise to 2-digit form before sending:
+    "2022" → "22"   |   "22" → "22"   |   anything else → raw
+  */
+  const normalisedBatchYear = batchYear.length === 4
+    ? batchYear.slice(2)
+    : batchYear;
 
-    setBatchError("");
+  const canProcess = pdfFile && normalisedBatchYear.length === 2;
+
+  const handleUpload = async () => {
+    if (!canProcess) return;
     setIsUploading(true);
     setShowDownload(false);
     setUploadStatus({ message: "Processing your file…", type: "loading" });
@@ -88,10 +90,10 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     try {
       const form = new FormData();
       form.append("pdf_file", pdfFile);
-      form.append("batch_year", batchYear.trim());
+      form.append("batch_year", normalisedBatchYear);
       if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
-      const res  = await fetch("http://127.0.0.1:8000/upload", { method: "POST", body: form });
+      const res  = await fetch(`${import.meta.env.VITE_API_URL}/upload`, { method: "POST", body: form });
       const data = await res.json();
       const ms   = Date.now() - startTimeRef.current;
 
@@ -112,7 +114,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
   };
 
   const handleDownload = () => {
-    fetch(`http://127.0.0.1:8000/download/${sessionId}`)
+    fetch(`${import.meta.env.VITE_API_URL}/download/${sessionId}`)
       .then(r => r.blob())
       .then(blob => {
         const url = URL.createObjectURL(blob);
@@ -128,14 +130,13 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
   const handleReset = () => {
     setPdfFile(null);
+    setBatchYear("");
     setShowDownload(false);
     setUploadStatus({ message: "", type: "" });
     setElapsed(null);
     setSessionId(null);
     setShowExtraSheet(false);
     setExcelFile(null);
-    setBatchYear("");
-    setBatchError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -180,13 +181,11 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
               onChange={handleFileChange}
             />
 
-            {/* Corner brackets */}
             <span className="us__corner us__corner--tl" />
             <span className="us__corner us__corner--tr" />
             <span className="us__corner us__corner--bl" />
             <span className="us__corner us__corner--br" />
 
-            {/* Icon */}
             <div className="us__drop-icon">
               {isUploading ? (
                 <svg className="us__icon-spin" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -245,81 +244,54 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                 aria-label="Remove file"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6"  x2="6"  y2="18"/>
-                  <line x1="6"  y1="6"  x2="18" y2="18"/>
+                  <line x1="18" y1="6" x2="6"  y2="18"/>
+                  <line x1="6"  y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
             </div>
           )}
 
-          {/* ══════════════════════════════════════
-              BATCH YEAR INPUT
-              ══════════════════════════════════════ */}
-          <div className={`us__batch${batchError ? " us__batch--error" : ""}`}>
-            <label className="us__batch-label" htmlFor="batch-year-input">
-              <div className="us__batch-label-icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8"  y1="2" x2="8"  y2="6"/>
-                  <line x1="3"  y1="10" x2="21" y2="10"/>
-                </svg>
-              </div>
-              <div className="us__batch-label-copy">
-                <span className="us__batch-label-text">
-                  Batch Year
-                  <span className="us__batch-required">*</span>
-                </span>
-                <span className="us__batch-label-sub">4-digit admission start year (e.g. 2021, 2022, 2023)</span>
-              </div>
-            </label>
-
-            <div className="us__batch-input-wrap">
-              {/* Prefix */}
-              <div className="us__batch-prefix">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-                AIE
-              </div>
-
-              <input
-                id="batch-year-input"
-                className="us__batch-input"
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                placeholder="2021"
-                value={batchYear}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 4);
-                  setBatchYear(val);
-                  if (batchError) setBatchError("");
-                }}
-              />
-
-              {/* Suffix preview */}
-              {batchYear.length === 4 && (
-                <div className="us__batch-preview">
-                  AIE<strong>{batchYear}</strong>CSXXX will be filtered
-                </div>
-              )}
+          {/* ══ BATCH YEAR ROW ══ */}
+          <div className="us__batch-row">
+            <div className="us__batch-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
             </div>
 
-            {batchError && (
-              <p className="us__batch-error-msg">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8"  x2="12"    y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                {batchError}
+            <div className="us__batch-body">
+              <label className="us__batch-label" htmlFor="batchYear">
+                Batch year
+                <span className="us__batch-required">required</span>
+              </label>
+              <p className="us__batch-sub">
+                Only students from this admission year will appear in the Excel.
+                Seniors writing arrears are excluded automatically.
               </p>
-            )}
+            </div>
+
+            <input
+              id="batchYear"
+              type="text"
+              inputMode="numeric"
+              className={`us__batch-input${normalisedBatchYear.length === 2 ? " us__batch-input--ok" : ""}`}
+              placeholder="2022"
+              value={batchYear}
+              onChange={handleBatchYearChange}
+              maxLength={4}
+              disabled={isUploading}
+            />
           </div>
+
+          {/* Hint shown when PDF is selected but year isn't complete yet */}
+          {pdfFile && normalisedBatchYear.length !== 2 && (
+            <p className="us__batch-hint">
+              ↑ Enter the 4-digit batch year to continue (e.g. <strong>2022</strong> for the 2022 intake)
+            </p>
+          )}
 
           {/* ── Internal marks toggle ── */}
           <button
@@ -335,7 +307,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                 </svg>
               </div>
               <div>
-                <p className="us__toggle-label">Attach internal marks sheet</p>
+                <p className="us__toggle-label">Attach internal marks PDF</p>
                 <p className="us__toggle-sub">Optional · merges internal marks into output Excel</p>
               </div>
             </div>
@@ -386,7 +358,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
           <button
             className="us__btn-process"
             onClick={handleUpload}
-            disabled={!pdfFile || isUploading}
+            disabled={!canProcess || isUploading}
           >
             {isUploading ? (
               <>
@@ -458,7 +430,6 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
           )}
 
         </div>
-        {/* end card */}
 
         {/* ── Trust strip ── */}
         <div className="us__trust us-animate">
