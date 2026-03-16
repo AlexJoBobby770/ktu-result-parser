@@ -1,16 +1,17 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
+// These values come from Vite environment variables.
+// In development: frontend/.env.local
+// In production:  set them in Vercel dashboard → Settings → Environment Variables
 const firebaseConfig = {
-  apiKey: "AIzaSyCaXzGKAUcVGzn79SRXST9nzL8D29VF3fk",
-  authDomain: "ktu-result-parser.firebaseapp.com",
-  projectId: "ktu-result-parser",
-  storageBucket: "ktu-result-parser.firebasestorage.app",
-  messagingSenderId: "811486921268",
-  appId: "1:811486921268:web:d07262efc9d0998388c061",
-  measurementId: "G-4FDP0KJFWE"
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
-
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

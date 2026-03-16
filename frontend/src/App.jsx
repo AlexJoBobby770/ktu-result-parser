@@ -7,8 +7,8 @@ import Auth from "./components/Auth";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import UploadSection from "./components/UploadSection";
-import Features from "./components/features";
-import Footer from "./components/footer";
+import Features from "./components/Features";
+import Footer from "./components/Footer";
 import HelpFaq from "./pages/HelpFaq";
 
 function MainApp({ user, handleLogout }) {
@@ -42,13 +42,10 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Listen to Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
     });
-
-    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
 
@@ -61,56 +58,34 @@ function App() {
     }
   };
 
-  // Show loading screen while checking auth state
   if (loading) {
     return (
       <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#080a0f',
-        color: '#fff'
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: '#080a0f', color: '#fff'
       }}>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '1rem'
-        }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
           <div style={{
-            width: '40px',
-            height: '40px',
+            width: '40px', height: '40px',
             border: '3px solid rgba(59,130,246,0.2)',
-            borderTopColor: '#3b82f6',
-            borderRadius: '50%',
+            borderTopColor: '#3b82f6', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite'
-          }}></div>
-          <p style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.4)' }}>
-            Loading...
-          </p>
+          }} />
+          <p style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.4)' }}>Loading...</p>
         </div>
-        <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
-  // Show Auth component if not logged in
   if (!user) {
     return <Auth onAuthSuccess={(user) => setUser(user)} />;
   }
 
-  // Show main app if logged in
+  // BrowserRouter wraps MainApp so Navbar can use useNavigate/useLocation
   return (
     <BrowserRouter>
-      <MainApp
-        user={user}
-        handleLogout={handleLogout}
-      />
+      <MainApp user={user} handleLogout={handleLogout} />
     </BrowserRouter>
   );
 }
