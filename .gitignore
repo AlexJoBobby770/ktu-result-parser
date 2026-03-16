@@ -7,6 +7,7 @@ venv/
 
 # Data & Outputs
 backend/data/*
+backend/.env
 !backend/data/.gitkeep
 backend/output/*
 !backend/output/.gitkeep
