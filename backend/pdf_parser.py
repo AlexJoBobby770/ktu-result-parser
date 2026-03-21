@@ -1,26 +1,37 @@
 # backend/pdf_parser.py
 import re
 import pdfplumber
-from backend.models import ExternalRecord, get_department
+
+try:
+    from backend.models import ExternalRecord, get_department
+except ModuleNotFoundError:
+    from models import ExternalRecord, get_department
 
 
 # Regex: matches USN at start of a line
 # Covers AIK, LAIK, SGI, SPT, GWE, MZW prefixes seen in real PDFs
 USN_PATTERN   = re.compile(r'^([A-Z]+\d{2}[A-Z]{2}\d{3})', re.MULTILINE)
-GRADE_PATTERN = re.compile(r'([A-Z]{2,4}\d{3})\(([^)]+)\)')
 
+# FIX 1: Changed {2,4} → {2,8} to handle long 2024-scheme codes
+# like GAMAT301, PCCST302, UCHUT346 (5-8 letter prefixes)
+GRADE_PATTERN = re.compile(r'([A-Z]{2,8}\d{3})\(([^)]+)\)')
+
+# FIX 2: Added AIML department
 DEPARTMENT_MAP = {
-    "CIVIL ENGINEERING":              "CE",
-    "MECHANICAL ENGINEERING":         "ME",
-    "ELECTRICAL AND ELECTRONICS":     "EEE",
-    "ELECTRONICS & COMMUNICATION":    "ECE",
-    "COMPUTER SCIENCE":               "CSE",
+    "CIVIL ENGINEERING":                                          "CE",
+    "MECHANICAL ENGINEERING":                                     "ME",
+    "ELECTRICAL AND ELECTRONICS":                                 "EEE",
+    "ELECTRONICS & COMMUNICATION":                                "ECE",
+    "COMPUTER SCIENCE & ENGINEERING":                             "CSE",
+    "COMPUTER SCIENCE AND ENGINEERING (ARTIFICIAL INTELLIGENCE":  "AIML",
 }
 
+# FIX 2: Added AIML header pattern
 DEPT_HEADER = re.compile(
     r'(CIVIL ENGINEERING|MECHANICAL ENGINEERING|'
     r'ELECTRICAL AND ELECTRONICS ENGINEERING|'
     r'ELECTRONICS & COMMUNICATION ENGG|'
+    r'Computer Science and Engineering \(Artificial Intelligence|'
     r'COMPUTER SCIENCE & ENGINEERING)'
     r'\[Full Time\]',
     re.IGNORECASE

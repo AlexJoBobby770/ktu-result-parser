@@ -6,7 +6,11 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from collections import defaultdict
 from datetime import datetime
-from backend.models import PASSING_GRADES, compute_sgpa
+
+try:
+    from backend.models import PASSING_GRADES, compute_sgpa
+except ModuleNotFoundError:
+    from models import PASSING_GRADES, compute_sgpa
 
 COLLEGE_NAME     = "ALBERTIAN INSTITUTE OF SCIENCE AND TECHNOLOGY (AISAT)"
 COLLEGE_LOCATION = "Kalamassery, Ernakulam, Kerala"
@@ -142,7 +146,7 @@ def _subject_analysis(ext_records, int_records, batch_year) -> pd.DataFrame:
 
     # Only analyse subjects that appear in the sessional PDF
     # and only for students in the same dept as the sessional PDF
-    known_codes = set(meta.keys())
+    known_codes   = set(meta.keys())
     sessional_usns = {r.usn for r in int_records}
 
     # Accumulate grades per subject (current batch, elected only, known codes only)
@@ -376,7 +380,6 @@ def _highlight_top10(ws, start=7):
                 c.font  = Font(name="Calibri", size=10, bold=True, color=TOP10_FG)
                 c.fill  = _fill(RANK_FILL)
             else:
-                # Keep existing font color logic but override fill
                 c.font = Font(name="Calibri", size=10, bold=True, color=TOP10_FG)
                 c.fill = _fill(TOP10_BG)
 

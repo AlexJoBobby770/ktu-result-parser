@@ -78,7 +78,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     ? batchYear.slice(2)
     : batchYear;
 
-  const canProcess = pdfFile && normalisedBatchYear.length === 2;
+  const canProcess = pdfFile !== null;
 
   const handleUpload = async () => {
     if (!canProcess) return;
@@ -93,8 +93,9 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
       form.append("batch_year", normalisedBatchYear);
       if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
-      const res  = await fetch(`${import.meta.env.VITE_API_URL}/upload`, { method: "POST", body: form });
+      const res = await fetch(`http://127.0.0.1:8000/download/${sessionId}`)
       const data = await res.json();
+      console.log("Upload response:", data);
       const ms   = Date.now() - startTimeRef.current;
 
       if (!res.ok) {

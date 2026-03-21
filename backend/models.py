@@ -10,6 +10,7 @@ Single source of truth for:
 """
 
 import os
+import re
 import csv
 from dataclasses import dataclass
 
@@ -258,19 +259,34 @@ def get_credits(course_code: str) -> int:
     Lookup order:
       1. CSV override  (faculty-editable, no code change required)
       2. Hardcoded registry  (KTU 2019 scheme)
-      3. Smart default from course-code structure:
-           third letter N  → 0  (non-credit)
-           third letter L/Q/D → 2  (lab / seminar / project)
-           anything else  → 3  (theory)
+      3. Smart default from course-code prefix structure (handles 2024 scheme):
+           last letter of prefix = N  → 0  (non-credit)
+           last letter of prefix = L/Q/D → 2  (lab / seminar / project)
+           prefix starts with UCH/HUT → 2  (humanities)
+           prefix starts with GAM/GYM/GAN → 3  (maths / science)
+           anything else → 4  (core theory: PCC, PBC, GAE, etc.)
     """
+    # FIX: Replaced old character-position logic with prefix-based logic
+    # so 2024-scheme codes like PCCST302, GAMAT301, UCHUT346 get correct credits.
     code = course_code.strip().upper()
     if code in _CSV_OVERRIDES:  return _CSV_OVERRIDES[code]
     if code in CREDIT_REGISTRY: return CREDIT_REGISTRY[code]
-    if len(code) >= 3:
-        n = code[2]
-        if n == "N":              return 0
-        if n in ("L", "Q", "D"): return 2
-    return 3
+
+    m = re.match(r'^([A-Z]+)(\d+)$', code)
+    if not m:
+        return 3
+
+    prefix   = m.group(1)      # e.g. "PCCST", "GAMAT", "UCHUT", "PCCSL"
+    type_ch  = prefix[-1]      # last letter of prefix = type indicator
+
+    if type_ch == "N":              return 0
+    if type_ch in ("L", "Q", "D"): return 2
+
+    # Theory — credits by category prefix (first 3 letters)
+    cat = prefix[:3]
+    if cat in ("UCH", "HUT"):        return 2   # humanities
+    if cat in ("GAM", "GYM", "GAN"): return 3   # maths / science
+    return 4                                     # core theory (PCC, PBC, GAE, etc.)
 
 
 # ---------------------------------------------------------------------------
