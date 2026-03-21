@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, forwardRef, useCallback, Fragment } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -84,8 +83,8 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
       ? batchYear
       : "";
 
-  /* Batch year is optional — only PDF is required */
-  const canProcess = pdfFile !== null;
+  /* Both PDF and a valid 2-digit batch year are required */
+  const canProcess = pdfFile !== null && normalisedBatchYear.length === 2;
 
   const handleUpload = async () => {
     if (!canProcess) return;
@@ -275,10 +274,10 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             <div className="us__batch-body">
               <label className="us__batch-label" htmlFor="batchYear">
                 Batch year
-                <span className="us__batch-required" style={{ background: "#888" }}>optional</span>
+                <span className="us__batch-required">required</span>
               </label>
               <p className="us__batch-sub">
-                Enter 2022 or 22 to filter by batch. Leave blank to include all students.
+                Enter the admission year (e.g. 2023). Only students from that batch will appear — seniors writing arrears are excluded automatically.
               </p>
             </div>
 
@@ -295,7 +294,12 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             />
           </div>
 
-          {/* ── Internal marks toggle ── */}
+          {/* Hint shown when PDF is selected but year isn't complete yet */}
+          {pdfFile && normalisedBatchYear.length !== 2 && (
+            <p className="us__batch-hint">
+              ↑ Enter the 4-digit batch year to continue (e.g. <strong>2023</strong> for the 2023 intake)
+            </p>
+          )}
           <button
             type="button"
             className={`us__toggle${showExtraSheet ? " us__toggle--on" : ""}`}
