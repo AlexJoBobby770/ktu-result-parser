@@ -19,9 +19,16 @@ from dataclasses import dataclass
 # ---------------------------------------------------------------------------
 
 GRADE_POINTS = {
-    "S":  10, "A+": 9, "A": 8.5, "B+": 8, "B": 7,
-    "C+": 6,  "C":  5.5, "D": 5, "P": 4,
-    "F": 0, "FE": 0, "Absent": 0, "Withheld": 0, "": 0,
+    "S":  10.0,
+    "A+":  9.0,
+    "A":   8.5,
+    "B+":  8.0,
+    "B":   7.5,  
+    "C+":  7.0,   
+    "C":   6.5,   
+    "D":   6.0,   
+    "P":   5.5,   
+    "F":   0.0, "FE": 0.0, "Absent": 0.0, "Withheld": 0.0, "": 0.0,
 }
 
 PASSING_GRADES = {"S", "A+", "A", "B+", "B", "C+", "C", "D", "P"}
@@ -303,19 +310,15 @@ def get_status(grade: str) -> str:
 
 
 def compute_sgpa(subject_grades: dict) -> float:
-    """
-    subject_grades = { "CST401": "A", "MCN401": "P", ... }
-    Zero-credit subjects are skipped.
-    Returns 0.0 if no creditable subjects.
-    """
     weighted, total = 0.0, 0
     for code, grade in subject_grades.items():
         cr = get_credits(code)
         if cr == 0: continue
+        if not grade or str(grade).strip() == "":  # skip missing grades
+            continue
         weighted += GRADE_POINTS.get(grade, 0) * cr
         total    += cr
     return round(weighted / total, 2) if total > 0 else 0.0
-
 
 def get_department(usn: str) -> str:
     u = usn.upper()

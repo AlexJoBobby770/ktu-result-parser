@@ -1,9 +1,13 @@
+
 import { useState, useEffect, useRef, forwardRef, useCallback, Fragment } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import "./UploadSection.css";
 
 gsap.registerPlugin(ScrollTrigger);
+
+// ── Hardcoded for now — move to .env.local later ──────────────────────────
+const API_URL = "http://127.0.0.1:8000";
 
 function formatBytes(bytes) {
   if (!bytes) return "—";
@@ -72,12 +76,15 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
 
   /*
     Normalise to 2-digit form before sending:
-    "2022" → "22"   |   "22" → "22"   |   anything else → raw
+    "2022" → "22"   |   "22" → "22"   |   anything else → ""
   */
   const normalisedBatchYear = batchYear.length === 4
     ? batchYear.slice(2)
-    : batchYear;
+    : batchYear.length === 2
+      ? batchYear
+      : "";
 
+  /* Batch year is optional — only PDF is required */
   const canProcess = pdfFile !== null;
 
   const handleUpload = async () => {
@@ -93,7 +100,8 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
       form.append("batch_year", normalisedBatchYear);
       if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
-      const res = await fetch(`http://127.0.0.1:8000/download/${sessionId}`)
+      // ── POST to /upload (not /download) ──────────────────────────────────
+      const res  = await fetch(`${API_URL}/upload`, { method: "POST", body: form });
       const data = await res.json();
       console.log("Upload response:", data);
       const ms   = Date.now() - startTimeRef.current;
@@ -107,7 +115,8 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
       setSessionId(data.session_id);
       setShowDownload(true);
       setUploadStatus({ message: "Your Excel file is ready to download.", type: "success" });
-    } catch {
+    } catch (err) {
+      console.error("Upload error:", err);
       setUploadStatus({ message: "Network error. Check your connection and retry.", type: "error" });
     } finally {
       setIsUploading(false);
@@ -115,7 +124,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
   };
 
   const handleDownload = () => {
-    fetch(`${import.meta.env.VITE_API_URL}/download/${sessionId}`)
+    fetch(`${API_URL}/download/${sessionId}`)
       .then(r => r.blob())
       .then(blob => {
         const url = URL.createObjectURL(blob);
@@ -266,11 +275,10 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             <div className="us__batch-body">
               <label className="us__batch-label" htmlFor="batchYear">
                 Batch year
-                <span className="us__batch-required">required</span>
+                <span className="us__batch-required" style={{ background: "#888" }}>optional</span>
               </label>
               <p className="us__batch-sub">
-                Only students from this admission year will appear in the Excel.
-                Seniors writing arrears are excluded automatically.
+                Enter 2022 or 22 to filter by batch. Leave blank to include all students.
               </p>
             </div>
 
@@ -286,13 +294,6 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
               disabled={isUploading}
             />
           </div>
-
-          {/* Hint shown when PDF is selected but year isn't complete yet */}
-          {pdfFile && normalisedBatchYear.length !== 2 && (
-            <p className="us__batch-hint">
-              ↑ Enter the 4-digit batch year to continue (e.g. <strong>2022</strong> for the 2022 intake)
-            </p>
-          )}
 
           {/* ── Internal marks toggle ── */}
           <button
