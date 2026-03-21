@@ -1,28 +1,30 @@
 # backend/pdf_parser.py
 import re
 import pdfplumber
-from models import ExternalRecord, get_department
+from backend.models import ExternalRecord, get_department
 
 
 # Regex: matches USN at start of a line
 # Covers AIK, LAIK, SGI, SPT, GWE, MZW prefixes seen in real PDFs
 USN_PATTERN   = re.compile(r'^([A-Z]+\d{2}[A-Z]{2}\d{3})', re.MULTILINE)
-GRADE_PATTERN = re.compile(r'([A-Z]{2,4}\d{3})\(([^)]+)\)')
+GRADE_PATTERN = re.compile(r'([A-Z]{2,8}\d{3})\(([^)]+)\)')
 
 DEPARTMENT_MAP = {
-    "CIVIL ENGINEERING":              "CE",
-    "MECHANICAL ENGINEERING":         "ME",
-    "ELECTRICAL AND ELECTRONICS":     "EEE",
-    "ELECTRONICS & COMMUNICATION":    "ECE",
-    "COMPUTER SCIENCE":               "CSE",
+    "CIVIL ENGINEERING":                                              "CE",
+    "MECHANICAL ENGINEERING":                                         "ME",
+    "ELECTRICAL AND ELECTRONICS":                                     "EEE",
+    "ELECTRONICS & COMMUNICATION":                                    "ECE",
+    "COMPUTER SCIENCE & ENGINEERING":                                 "CSE",
+    "COMPUTER SCIENCE AND ENGINEERING (ARTIFICIAL INTELLIGENCE":      "AIML",
 }
 
 DEPT_HEADER = re.compile(
     r'(CIVIL ENGINEERING|MECHANICAL ENGINEERING|'
     r'ELECTRICAL AND ELECTRONICS ENGINEERING|'
     r'ELECTRONICS & COMMUNICATION ENGG|'
+    r'Computer Science and Engineering \(Artificial Intelligence|'
     r'COMPUTER SCIENCE & ENGINEERING)'
-    r'\[Full Time\]',
+    r'[^\[]*\[Full Time\]',
     re.IGNORECASE
 )
 

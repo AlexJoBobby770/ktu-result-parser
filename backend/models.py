@@ -303,6 +303,7 @@ def compute_sgpa(subject_grades: dict) -> float:
 
 def get_department(usn: str) -> str:
     u = usn.upper()
+    if "AM" in u: return "AIML"   # AI & ML — must check before CS
     if "CS" in u: return "CSE"
     if "EC" in u: return "ECE"
     if "EE" in u: return "EEE"

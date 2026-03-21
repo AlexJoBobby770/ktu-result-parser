@@ -1,17 +1,13 @@
 # backend/internal_parser.py
 import re
 import pdfplumber
-from models import InternalRecord
+from backend.models import InternalRecord
 
-
-# Matches the footer course table lines like:
-# 1 MCN401 INDUSTRIAL SAFETY ENGINEERING Ms. Shruthi Chandran
-FOOTER_PATTERN = re.compile(
-    r'^\d+\s+([A-Z]{2,4}\d{3})\s+(.+?)\s+((?:Ms\.|Mr\.|Dr\.)\s+\S.+)$'
-)
-
-# USN pattern - same prefixes as KTU PDF
-USN_PATTERN = re.compile(r'^((?:AIK|LAIK|SGI|SPT|GWE|MZW)\d{2}[A-Z]{2}\d{3})$')
+COURSE_CODE_RE = re.compile(r'^([A-Z]{2,8}\d{3})$')
+USN_RE_SEARCH  = re.compile(r'(?:AIK|LAIK|SGI|SPT|GWE|MZW|MET)\d{2}[A-Z]{2}\d{3}')
+USN_RE_EXACT   = re.compile(r'^((?:AIK|LAIK|SGI|SPT|GWE|MZW|MET)\d{2}[A-Z]{2}\d{3})$')
+NUMBER_RE      = re.compile(r'^\d+(\.\d+)?$')
+INT_RE         = re.compile(r'^\d+$')
 
 
 def extract_text(pdf_path: str) -> str:
@@ -24,154 +20,236 @@ def extract_text(pdf_path: str) -> str:
     return text
 
 
+def detect_batch_year(text: str) -> str:
+    m = re.search(r'Batch.*?:(\d{4})-\d{4}', text)
+    if m:
+        return m.group(1)[2:]
+    return ''
+
+
 def parse_subject_footer(text: str) -> dict:
     """
-    Parse the footer table at the bottom of the sessional PDF.
-    Returns { "CST401": ("ARTIFICIAL INTELLIGENCE", "Ms. NISY JOHN PANICKER"), ... }
-    One entry per unique subject code (multiple faculty lines are merged).
+    Parse '# Course Code Course Name Faculty' footer table.
+    Handles multi-line subject names (name wraps to the line before the code).
+    Returns {code: (subject_name, faculty_name)}
     """
-    subject_map = {}
+    subject_map  = {}
+    FOOTER_LINE  = re.compile(
+        r'^\d{1,2}\s+([A-Z]{2,8}\d{3})\s*(.*?)\s*((?:Ms\.|Mr\.|Dr\.)\s+\S.*)$'
+    )
+    pending_name = ""
 
-    for line in text.split("\n"):
-        m = FOOTER_PATTERN.match(line.strip())
-        if not m:
+    for line in text.split('\n'):
+        stripped = line.strip()
+        m = FOOTER_LINE.match(stripped)
+        if m:
+            code    = m.group(1).strip()
+            inline  = m.group(2).strip()
+            faculty = m.group(3).strip()
+            name    = inline if inline else pending_name
+            if code not in subject_map:
+                subject_map[code] = (name, faculty)
+            else:
+                n, f = subject_map[code]
+                subject_map[code] = (n, f"{f}, {faculty}")
+            pending_name = ""
             continue
 
-        code = m.group(1).strip()
-        name = m.group(2).strip()
-        faculty = m.group(3).strip()
-
-        if code not in subject_map:
-            subject_map[code] = (name, faculty)
+        if (stripped
+                and not stripped.startswith('#')
+                and not stripped.startswith('Signature')
+                and not stripped.startswith('Date')
+                and not stripped.startswith('Disclaimer')
+                and not re.match(r'^\d', stripped)
+                and not re.search(r'(?:Ms\.|Mr\.|Dr\.)', stripped)):
+            pending_name = stripped
         else:
-            # Multiple faculty for same subject — append name
-            existing_name, existing_faculty = subject_map[code]
-            subject_map[code] = (existing_name, f"{existing_faculty}, {faculty}")
+            pending_name = ""
 
     return subject_map
 
 
-def detect_batch_year(text: str) -> str:
+def detect_format(text: str) -> str:
     """
-    Extract 2-digit batch year from sessional PDF header.
-    e.g. 'Batch & Semester :2022-2026 S7'  →  '22'
-    Returns '' if not found.
+    Detect which PDF format this is:
+      'excel'    — converted from Excel: no attendance columns, marks only
+      'original' — original AISAT PDF: has attendance % columns
     """
-    m = re.search(r'Batch.*?:(\d{4})-\d{4}', text)
-    if m:
-        return m.group(1)[2:]   # '2022' → '22'
-    return ''
+    # Excel-converted PDFs have a two-line header like:
+    #   "Roll UCHUT GAMAT PCCST ..."
+    #   "no 346 301 302 ..."
+    # Original PDFs have "Mark Att %" columns
+    if re.search(r'\bMark\b.*\bAtt\s*%\b', text) or re.search(r'\bAtt\s*%\b.*\bMark\b', text):
+        return 'original'
+    return 'excel'
+
+
+def parse_excel_format(text: str, subject_map: dict) -> tuple:
+    """
+    Parse Excel-converted PDF.
+    Row format: roll_no USN name mark1 mark2 ... markN total
+    No attendance columns.
+    """
+    codes         = list(subject_map.keys())
+    subject_count = len(codes)
+    records       = []
+    name_mapping  = {}
+
+    # Cut stats footer
+    cutoff = text.find("Class Average")
+    body   = text[:cutoff] if cutoff > 0 else text
+
+    tokens = body.split()
+    i, total = 0, len(tokens)
+
+    while i < total:
+        # Skip roll number
+        if INT_RE.match(tokens[i]) and len(tokens[i]) <= 3:
+            i += 1
+            continue
+
+        if not USN_RE_EXACT.match(tokens[i]):
+            i += 1
+            continue
+
+        usn = tokens[i]; i += 1
+
+        # Student name — uppercase words until first number
+        name_parts = []
+        while i < total and not NUMBER_RE.match(tokens[i]):
+            name_parts.append(tokens[i])
+            i += 1
+        name = " ".join(name_parts).strip()
+        name_mapping[usn] = name
+
+        # Marks — just integers, one per subject, then Total
+        marks = []
+        for _ in range(subject_count):
+            if i < total and INT_RE.match(tokens[i]):
+                marks.append(int(tokens[i])); i += 1
+            else:
+                marks.append(0)
+
+        # Skip Total
+        if i < total and INT_RE.match(tokens[i]):
+            i += 1
+
+        for idx, code in enumerate(codes):
+            sname, faculty = subject_map[code]
+            mark = marks[idx] if idx < len(marks) else 0
+            records.append(InternalRecord(
+                usn=usn, student_name=name,
+                course_code=code, subject_name=sname,
+                faculty_name=faculty, internal_mark=mark, elected=True,
+            ))
+
+    return records, name_mapping
+
+
+def parse_original_format(text: str, subject_map: dict) -> tuple:
+    """
+    Parse original AISAT sessional PDF.
+    Row format: roll_no USN name (mark att%)* total
+    Has attendance % columns interleaved with marks.
+    Electives marked with * instead of mark.
+    """
+    codes         = list(subject_map.keys())
+    subject_count = len(codes)
+    records       = []
+    name_mapping  = {}
+
+    cutoff = text.find("Class Average")
+    body   = text[:cutoff] if cutoff > 0 else text
+
+    tokens = body.split()
+    i, total = 0, len(tokens)
+
+    while i < total:
+        if INT_RE.match(tokens[i]) and len(tokens[i]) <= 3:
+            i += 1; continue
+
+        if not USN_RE_EXACT.match(tokens[i]):
+            i += 1; continue
+
+        usn = tokens[i]; i += 1
+
+        name_parts = []
+        while i < total and not NUMBER_RE.match(tokens[i]):
+            name_parts.append(tokens[i]); i += 1
+        name = " ".join(name_parts).strip()
+        name_mapping[usn] = name
+
+        marks = []
+        for _ in range(subject_count):
+            if i >= total:
+                marks.append((0, False)); continue
+            if tokens[i] == "*":
+                i += 1
+                if i < total and NUMBER_RE.match(tokens[i]):
+                    i += 1   # skip att% after *
+                marks.append((0, False))
+            else:
+                mark_val = 0
+                if INT_RE.match(tokens[i]):
+                    mark_val = int(tokens[i]); i += 1
+                if i < total and NUMBER_RE.match(tokens[i]):
+                    i += 1   # skip att%
+                marks.append((mark_val, True))
+
+        if i < total and INT_RE.match(tokens[i]):
+            i += 1   # skip Total
+
+        for idx, code in enumerate(codes):
+            sname, faculty = subject_map[code]
+            mark, elected = marks[idx] if idx < len(marks) else (0, False)
+            records.append(InternalRecord(
+                usn=usn, student_name=name,
+                course_code=code, subject_name=sname,
+                faculty_name=faculty, internal_mark=mark, elected=elected,
+            ))
+
+    return records, name_mapping
 
 
 def parse_sessional_pdf(pdf_path: str) -> tuple:
     """
-    Parse the college sessional marks PDF.
+    Parse sessional marks PDF.
 
-    Returns:
-        records     : list of InternalRecord
-        name_mapping: { usn: student_name }
+    Handles two formats:
+      'excel'    — converted from Excel (no attendance columns)
+      'original' — original AISAT PDF (has attendance % columns + elective * markers)
 
-    How electives work in the PDF:
-        Subjects are listed left-to-right in the header row.
-        Each subject has TWO columns: Mark and Att%.
-        For a skipped elective the Mark column contains '*'
-        and the Att% column contains a number (0 or 100).
-        We use elected=False for those records and internal_mark=0.
+    Both formats must have the '# Course Code' footer table.
+    If footer is missing, raises a clear error telling the teacher.
+
+    Returns: (records, name_mapping, batch_year)
     """
-    text = extract_text(pdf_path)
+    text       = extract_text(pdf_path)
+    batch_year = detect_batch_year(text)
 
-    # Cut text before footer stats so "Class Average" etc. don't confuse parsing
-    cutoff = text.find("Class Average")
-    body = text[:cutoff] if cutoff > 0 else text
-
-    # Parse footer AFTER cutoff to get subject metadata
-    subject_map = parse_subject_footer(text)
-
-    if not subject_map:
+    # Parse footer — required in both formats
+    if '# Course Code' not in text:
         raise ValueError(
-            "Could not find subject footer table in sessional PDF. "
-            "Check that the PDF has the '# Course Code ...' section."
+            "Could not find the subject table in the sessional PDF.\n\n"
+            "The PDF must contain the '# Course Code / Course Name / Faculty' "
+            "table at the bottom. This table is required to identify subject names "
+            "and assign marks correctly.\n\n"
+            "If you converted an Excel file to PDF, make sure all pages/sheets "
+            "were included in the export, including the last page with the subject table."
         )
 
-    subject_codes = list(subject_map.keys())
-    subject_count = len(subject_codes)
+    subject_map = parse_subject_footer(text)
+    if not subject_map:
+        raise ValueError(
+            "Found the subject table header but could not parse any subject rows. "
+            "Please check the PDF is not corrupted or password-protected."
+        )
 
-    records = []
-    name_mapping = {}
+    fmt = detect_format(text)
 
-    tokens = body.split()
-    i = 0
-    total = len(tokens)
+    if fmt == 'excel':
+        records, name_mapping = parse_excel_format(text, subject_map)
+    else:
+        records, name_mapping = parse_original_format(text, subject_map)
 
-    while i < total:
-        token = tokens[i]
-
-        # Skip roll number (pure integer)
-        if re.match(r'^\d{1,3}$', token):
-            i += 1
-            continue
-
-        # Detect USN
-        if not USN_PATTERN.match(token):
-            i += 1
-            continue
-
-        usn = token
-        i += 1
-
-        # --- Extract student name ---
-        # Name tokens are uppercase alphabetic words (may include spaces)
-        # Stop when we hit a number (first mark value)
-        name_parts = []
-        while i < total and not re.match(r'^\d+(\.\d+)?$', tokens[i]):
-            name_parts.append(tokens[i])
-            i += 1
-        student_name = " ".join(name_parts).strip()
-        name_mapping[usn] = student_name
-
-        # --- Extract marks for each subject in order ---
-        marks = []    # list of (mark_int, elected_bool)
-
-        for _ in range(subject_count):
-            if i >= total:
-                marks.append((0, False))
-                continue
-
-            if tokens[i] == "*":
-                # Elective NOT chosen by student
-                i += 1  # skip '*'
-                if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
-                    i += 1  # skip the attendance number that follows *
-                marks.append((0, False))
-            else:
-                # Normal subject: mark then att%
-                mark_val = 0
-                if re.match(r'^\d+$', tokens[i]):
-                    mark_val = int(tokens[i])
-                    i += 1
-                # Skip attendance %
-                if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
-                    i += 1
-                marks.append((mark_val, True))
-
-        # Skip Total column (one final integer)
-        if i < total and re.match(r'^\d+$', tokens[i]):
-            i += 1
-
-        # Build InternalRecord for each subject
-        for idx, code in enumerate(subject_codes):
-            subject_name, faculty_name = subject_map[code]
-            mark, elected = marks[idx] if idx < len(marks) else (0, False)
-
-            records.append(InternalRecord(
-                usn=usn,
-                student_name=student_name,
-                course_code=code,
-                subject_name=subject_name,
-                faculty_name=faculty_name,
-                internal_mark=mark,
-                elected=elected,
-            ))
-
-    batch_year = detect_batch_year(text)
     return records, name_mapping, batch_year
