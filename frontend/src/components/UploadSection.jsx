@@ -5,7 +5,6 @@ import "./UploadSection.css";
 
 gsap.registerPlugin(ScrollTrigger);
 
-// ── Hardcoded for now — move to .env.local later ──────────────────────────
 const API_URL = "http://127.0.0.1:8000";
 
 function formatBytes(bytes) {
@@ -15,17 +14,33 @@ function formatBytes(bytes) {
   return `${(bytes / 1048576).toFixed(2)} MB`;
 }
 
+/* ── Inline SVG helpers ────────────────────────────────── */
+const Icon = ({ size = 16, strokeWidth = 2, children, className = "" }) => (
+  <svg
+    width={size} height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    {children}
+  </svg>
+);
+
 const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
-  const [pdfFile, setPdfFile]               = useState(null);
-  const [batchYear, setBatchYear]           = useState("");
-  const [dragOver, setDragOver]             = useState(false);
-  const [isUploading, setIsUploading]       = useState(false);
-  const [uploadStatus, setUploadStatus]     = useState({ message: "", type: "" });
-  const [sessionId, setSessionId]           = useState(null);
-  const [showDownload, setShowDownload]     = useState(false);
-  const [elapsed, setElapsed]               = useState(null);
+  const [pdfFile,        setPdfFile]        = useState(null);
+  const [batchYear,      setBatchYear]      = useState("");
+  const [dragOver,       setDragOver]       = useState(false);
+  const [isUploading,    setIsUploading]    = useState(false);
+  const [uploadStatus,   setUploadStatus]   = useState({ message: "", type: "" });
+  const [sessionId,      setSessionId]      = useState(null);
+  const [showDownload,   setShowDownload]   = useState(false);
+  const [elapsed,        setElapsed]        = useState(null);
   const [showExtraSheet, setShowExtraSheet] = useState(false);
-  const [excelFile, setExcelFile]           = useState(null);
+  const [excelFile,      setExcelFile]      = useState(null);
 
   const sectionRef   = useRef(null);
   const fileInputRef = useRef(null);
@@ -37,19 +52,18 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     if (!el) return;
     gsap.fromTo(
       el.querySelectorAll(".us-animate"),
-      { opacity: 0, y: 32 },
+      { opacity: 0, y: 28 },
       {
         opacity: 1, y: 0,
-        duration: 0.8,
-        stagger: 0.1,
+        duration: 0.85,
+        stagger: 0.11,
         ease: "power3.out",
-        scrollTrigger: { trigger: el, start: "top 80%" },
+        scrollTrigger: { trigger: el, start: "top 82%" },
       }
     );
   }, [ref]);
 
-  /* drag handlers */
-  const onDragOver  = useCallback(e => { e.preventDefault(); setDragOver(true); }, []);
+  const onDragOver  = useCallback(e => { e.preventDefault(); setDragOver(true);  }, []);
   const onDragLeave = useCallback(() => setDragOver(false), []);
   const onDrop      = useCallback(e => {
     e.preventDefault();
@@ -67,23 +81,17 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     }
   };
 
-  /* Sanitise batch year — digits only, max 4 chars */
   const handleBatchYearChange = (e) => {
     const val = e.target.value.replace(/\D/g, "").slice(0, 4);
     setBatchYear(val);
   };
 
-  /*
-    Normalise to 2-digit form before sending:
-    "2022" → "22"   |   "22" → "22"   |   anything else → ""
-  */
   const normalisedBatchYear = batchYear.length === 4
     ? batchYear.slice(2)
     : batchYear.length === 2
       ? batchYear
       : "";
 
-  /* Both PDF and a valid 2-digit batch year are required */
   const canProcess = pdfFile !== null && normalisedBatchYear.length === 2;
 
   const handleUpload = async () => {
@@ -99,10 +107,8 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
       form.append("batch_year", normalisedBatchYear);
       if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
-      // ── POST to /upload (not /download) ──────────────────────────────────
       const res  = await fetch(`${API_URL}/upload`, { method: "POST", body: form });
       const data = await res.json();
-      console.log("Upload response:", data);
       const ms   = Date.now() - startTimeRef.current;
 
       if (!res.ok) {
@@ -128,7 +134,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
       .then(blob => {
         const url = URL.createObjectURL(blob);
         const a   = Object.assign(document.createElement("a"), {
-          href: url, download: `KTU_Results_${sessionId}.xlsx`
+          href: url, download: `KTU_Results_${sessionId}.xlsx`,
         });
         document.body.appendChild(a);
         a.click();
@@ -149,11 +155,18 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  /* Drop zone class string */
+  const dropCls = [
+    "us__drop",
+    dragOver ? "us__drop--over" : "",
+    pdfFile  ? "us__drop--loaded" : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <section className="us" ref={ref || sectionRef} id="upload">
       <div className="us__container">
 
-        {/* ── Section label ── */}
+        {/* ── Eyebrow ── */}
         <div className="us__eyebrow us-animate">
           <span className="us__eyebrow-line" />
           Upload Your PDF
@@ -165,22 +178,26 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
           Drop your result PDF.<br />
           <span className="us__headline-accent">Get your Excel instantly.</span>
         </h2>
+
         <p className="us__sub us-animate">
           Our parser reads any KTU semester result PDF and converts it into a
           clean, structured Excel sheet — ready to share or archive in seconds.
         </p>
 
-        {/* ══════════════════════ UPLOAD CARD ══════════════════════ */}
+        {/* ════════════════ CARD ════════════════ */}
         <div className="us__card us-animate">
 
           {/* ── Drop zone ── */}
           <div
-            className={`us__drop${dragOver ? " us__drop--over" : ""}${pdfFile ? " us__drop--loaded" : ""}`}
+            className={dropCls}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
             onClick={() => !isUploading && fileInputRef.current?.click()}
             style={{ cursor: isUploading ? "default" : "pointer" }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === "Enter" && !isUploading && fileInputRef.current?.click()}
           >
             <input
               type="file"
@@ -190,36 +207,41 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
               onChange={handleFileChange}
             />
 
+            {/* Corner brackets */}
             <span className="us__corner us__corner--tl" />
             <span className="us__corner us__corner--tr" />
             <span className="us__corner us__corner--bl" />
             <span className="us__corner us__corner--br" />
 
+            {/* Central icon */}
             <div className="us__drop-icon">
               {isUploading ? (
-                <svg className="us__icon-spin" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <Icon size={30} strokeWidth={1.7} className="us__icon-spin">
                   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                </svg>
+                </Icon>
               ) : pdfFile ? (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <Icon size={30} strokeWidth={1.7}>
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                   <polyline points="14 2 14 8 20 8"/>
                   <line x1="16" y1="13" x2="8" y2="13"/>
                   <line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
+                </Icon>
               ) : (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <Icon size={30} strokeWidth={1.7}>
                   <polyline points="16 16 12 12 8 16"/>
                   <line x1="12" y1="12" x2="12" y2="21"/>
                   <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
-                </svg>
+                </Icon>
               )}
             </div>
 
+            {/* Copy */}
             {pdfFile ? (
               <div className="us__drop-copy">
                 <p className="us__drop-title">File ready</p>
-                <p className="us__drop-hint">Drop a new PDF to replace, or press <strong>Process</strong> below</p>
+                <p className="us__drop-hint">
+                  Drop a new PDF to replace, or press <strong>Process PDF</strong> below
+                </p>
               </div>
             ) : (
               <div className="us__drop-copy">
@@ -227,12 +249,13 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                   {dragOver ? "Release to upload" : "Drag & drop your PDF here"}
                 </p>
                 <p className="us__drop-hint">
-                  or <span className="us__drop-browse">click to browse</span> — KTU format, any semester
+                  or <span className="us__drop-browse">click to browse</span>
+                  {" "}— KTU format, any semester
                 </p>
                 <div className="us__drop-pills">
                   <span className="us__pill">.pdf</span>
-                  <span className="us__pill">KTU Format</span>
-                  <span className="us__pill">Any Semester</span>
+                  <span className="us__pill">KTU format</span>
+                  <span className="us__pill">Any semester</span>
                 </div>
               </div>
             )}
@@ -244,7 +267,9 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
               <div className="us__file-badge">PDF</div>
               <div className="us__file-info">
                 <span className="us__file-name">{pdfFile.name}</span>
-                <span className="us__file-meta">{formatBytes(pdfFile.size)} · application/pdf</span>
+                <span className="us__file-meta">
+                  {formatBytes(pdfFile.size)} · application/pdf
+                </span>
               </div>
               <button
                 className="us__file-remove"
@@ -252,23 +277,23 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                 title="Remove file"
                 aria-label="Remove file"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6"  y2="18"/>
-                  <line x1="6"  y1="6" x2="18" y2="18"/>
-                </svg>
+                <Icon size={13} strokeWidth={2.5}>
+                  <line x1="18" y1="6"  x2="6"  y2="18"/>
+                  <line x1="6"  y1="6"  x2="18" y2="18"/>
+                </Icon>
               </button>
             </div>
           )}
 
-          {/* ══ BATCH YEAR ROW ══ */}
+          {/* ── Batch year ── */}
           <div className="us__batch-row">
             <div className="us__batch-icon">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <Icon size={15} strokeWidth={2.2}>
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                 <circle cx="9" cy="7" r="4"/>
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-              </svg>
+              </Icon>
             </div>
 
             <div className="us__batch-body">
@@ -277,7 +302,8 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                 <span className="us__batch-required">required</span>
               </label>
               <p className="us__batch-sub">
-                Enter the admission year (e.g. 2023). Only students from that batch will appear — seniors writing arrears are excluded automatically.
+                Enter the admission year (e.g. 2023). Only students from that
+                batch will appear — seniors writing arrears are excluded automatically.
               </p>
             </div>
 
@@ -294,27 +320,35 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             />
           </div>
 
-          {/* Hint shown when PDF is selected but year isn't complete yet */}
+          {/* Batch hint */}
           {pdfFile && normalisedBatchYear.length !== 2 && (
             <p className="us__batch-hint">
-              ↑ Enter the 4-digit batch year to continue (e.g. <strong>2023</strong> for the 2023 intake)
+              ↑ Enter the 4-digit batch year to continue (e.g.{" "}
+              <strong>2023</strong> for the 2023 intake)
             </p>
           )}
+
+          {/* ── Internal marks toggle ── */}
           <button
             type="button"
             className={`us__toggle${showExtraSheet ? " us__toggle--on" : ""}`}
-            onClick={() => { setShowExtraSheet(v => !v); if (showExtraSheet) setExcelFile(null); }}
+            onClick={() => {
+              setShowExtraSheet(v => !v);
+              if (showExtraSheet) setExcelFile(null);
+            }}
           >
             <div className="us__toggle-left">
               <div className="us__toggle-icon">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <Icon size={15} strokeWidth={2.2}>
                   <rect x="3" y="3" width="18" height="18" rx="2"/>
                   <path d="M3 9h18M9 21V9"/>
-                </svg>
+                </Icon>
               </div>
               <div>
                 <p className="us__toggle-label">Attach internal marks PDF</p>
-                <p className="us__toggle-sub">Optional · merges internal marks into output Excel</p>
+                <p className="us__toggle-sub">
+                  Optional · merges internal marks into output Excel
+                </p>
               </div>
             </div>
             <div className="us__switch">
@@ -322,7 +356,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             </div>
           </button>
 
-          {/* Internal marks file picker */}
+          {/* Extra file picker */}
           {showExtraSheet && (
             <label className="us__extra-drop">
               <input
@@ -336,28 +370,29 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                   <div className="us__file-badge us__file-badge--sm">PDF</div>
                   <div className="us__file-info">
                     <span className="us__file-name">{excelFile.name}</span>
-                    <span className="us__file-meta">{formatBytes(excelFile.size)} · internal marks</span>
+                    <span className="us__file-meta">
+                      {formatBytes(excelFile.size)} · internal marks
+                    </span>
                   </div>
                   <div className="us__extra-check">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                    <Icon size={11} strokeWidth={3}>
                       <polyline points="20 6 9 17 4 12"/>
-                    </svg>
+                    </Icon>
                   </div>
                 </div>
               ) : (
                 <div className="us__extra-empty">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <Icon size={17} strokeWidth={2}>
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="17 8 12 3 7 8"/>
                     <line x1="12" y1="3" x2="12" y2="15"/>
-                  </svg>
+                  </Icon>
                   <span>Click to browse <strong>internal marks PDF</strong></span>
                 </div>
               )}
             </label>
           )}
 
-          {/* ── Divider ── */}
           <div className="us__divider" />
 
           {/* ── Process button ── */}
@@ -373,9 +408,9 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
               </>
             ) : (
               <>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <Icon size={16} strokeWidth={2.5}>
                   <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
+                </Icon>
                 Process PDF
               </>
             )}
@@ -386,16 +421,17 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             <div className={`us__status us__status--${uploadStatus.type}`}>
               <span className="us__status-icon">
                 {uploadStatus.type === "success" && (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-                  </svg>
+                  <Icon size={16} strokeWidth={2.5}>
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </Icon>
                 )}
                 {uploadStatus.type === "error" && (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <Icon size={16} strokeWidth={2.5}>
                     <circle cx="12" cy="12" r="10"/>
                     <line x1="12" y1="8"  x2="12"    y2="12"/>
                     <line x1="12" y1="16" x2="12.01" y2="16"/>
-                  </svg>
+                  </Icon>
                 )}
                 {uploadStatus.type === "loading" && (
                   <span className="us__spinner us__spinner--blue" />
@@ -410,22 +446,26 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             <div className="us__download">
               <div className="us__download-left">
                 <div className="us__download-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <Icon size={18} strokeWidth={2.5}>
                     <polyline points="20 6 9 17 4 12"/>
-                  </svg>
+                  </Icon>
                 </div>
                 <div>
-                  <p className="us__download-title">Ready — processed in {elapsed}s</p>
-                  <p className="us__download-file">KTU_Results_{sessionId?.slice(0, 8)}.xlsx</p>
+                  <p className="us__download-title">
+                    Ready — processed in {elapsed}s
+                  </p>
+                  <p className="us__download-file">
+                    KTU_Results_{sessionId?.slice(0, 8)}.xlsx
+                  </p>
                 </div>
               </div>
               <div className="us__download-actions">
                 <button className="us__btn-download" onClick={handleDownload}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <Icon size={14} strokeWidth={2.5}>
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7 10 12 15 17 10"/>
                     <line x1="12" y1="15" x2="12" y2="3"/>
-                  </svg>
+                  </Icon>
                   Download Excel
                 </button>
                 <button className="us__btn-reset" onClick={handleReset}>
@@ -435,26 +475,46 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             </div>
           )}
 
-        </div>
+        </div>{/* /card */}
 
         {/* ── Trust strip ── */}
         <div className="us__trust us-animate">
           {[
-            { label: "Firebase authenticated",
-              icon: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/> },
-            { label: "Encrypted in transit",
-              icon: <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></> },
-            { label: "Zero data retention",
-              icon: <><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.29"/></> },
-            { label: "KTU native format",
-              icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></> },
+            {
+              label: "Firebase authenticated",
+              icon: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
+            },
+            {
+              label: "Encrypted in transit",
+              icon: (
+                <>
+                  <rect x="3" y="11" width="18" height="11" rx="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </>
+              ),
+            },
+            {
+              label: "Zero data retention",
+              icon: (
+                <>
+                  <polyline points="1 4 1 10 7 10"/>
+                  <path d="M3.51 15a9 9 0 1 0 .49-3.29"/>
+                </>
+              ),
+            },
+            {
+              label: "KTU native format",
+              icon: (
+                <>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </>
+              ),
+            },
           ].map((item, i, arr) => (
             <Fragment key={item.label}>
               <div className="us__trust-item">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  {item.icon}
-                </svg>
+                <Icon size={13} strokeWidth={2}>{item.icon}</Icon>
                 {item.label}
               </div>
               {i < arr.length - 1 && <span className="us__trust-dot" />}
