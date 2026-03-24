@@ -24,6 +24,7 @@ DEPARTMENT_MAP = {
     "ELECTRONICS & COMMUNICATION":                                "ECE",
     "COMPUTER SCIENCE & ENGINEERING":                             "CSE",
     "COMPUTER SCIENCE AND ENGINEERING (ARTIFICIAL INTELLIGENCE":  "AIML",
+    "COMPUTER SCIENCE WITH AI AND ML":                            "AIML",
 }
 
 # FIX 2: Added AIML header pattern
@@ -32,6 +33,7 @@ DEPT_HEADER = re.compile(
     r'ELECTRICAL AND ELECTRONICS ENGINEERING|'
     r'ELECTRONICS & COMMUNICATION ENGG|'
     r'Computer Science and Engineering \(Artificial Intelligence|'
+    r'Computer Science with AI and ML|'
     r'COMPUTER SCIENCE & ENGINEERING)'
     r'\[Full Time\]',
     re.IGNORECASE

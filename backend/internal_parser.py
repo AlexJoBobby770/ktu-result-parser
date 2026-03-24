@@ -7,6 +7,15 @@ try:
 except ModuleNotFoundError:
     from models import InternalRecord
 
+USN_PATTERN    = re.compile(r'^((?:AIK|LAIK|SGI|SPT|GWE|MZW|MET)\d{2}[A-Z]{2,3}\d{3})$')
+SUBJECT_CODE   = re.compile(r'^[A-Z]{2,8}\d{3}$')
+FOOTER_PATTERN = re.compile(
+    r'^\d+\s+([A-Z]{2,8}\d{3})\s+(.+?)\s+((?:Ms\.|Mr\.|Dr\.)\s+\S.+)$'
+)
+
+# Allow fallback footer lines without honorifics to support different PDF formatting.
+FOOTER_FALLBACK = re.compile(r'^\d+\s+([A-Z]{2,8}\d{3})\s+(.+?)\s+(.+)$')
+
 
 # FIX: Changed [A-Z]{2,4} → [A-Z]{2,8} to match long 2024-scheme course codes
 # like GAMAT301, PCCST302, UCHUT346
@@ -58,18 +67,33 @@ def parse_subject_footer(text: str) -> dict:
 def _find_header_codes(text: str) -> list:
     """
     Fallback: scan the header row for course codes when no footer table exists.
-    Looks for lines that contain only course codes (e.g. 'CST401 MCN401 CSL411').
+    Looks for the line containing 'Reg no' or 'Roll No', then extracts course codes
+    from that line and subsequent lines until codes are found.
+    Handles cases where codes are split across tokens (e.g. 'CST30 1' -> 'CST301').
     Returns ordered list of codes, or empty list if nothing found.
     """
-    # Match a line that is entirely made up of KTU-style course codes
-    header_line_pattern = re.compile(
-        r'^((?:[A-Z]{2,8}\d{3})\s+)+(?:[A-Z]{2,8}\d{3})\s*$'
-    )
+    codes = []
+    header_found = False
     for line in text.split("\n"):
         stripped = line.strip()
-        if header_line_pattern.match(stripped):
-            return re.findall(r'[A-Z]{2,8}\d{3}', stripped)
-    return []
+        if not header_found and ("Reg no" in stripped or "Roll No" in stripped):
+            header_found = True
+        if header_found:
+            tokens = stripped.split()
+            i = 0
+            while i < len(tokens):
+                token = tokens[i]
+                if SUBJECT_CODE.match(token):
+                    codes.append(token)
+                    i += 1
+                elif i+1 < len(tokens) and SUBJECT_CODE.match(token + tokens[i+1]):
+                    codes.append(token + tokens[i+1])
+                    i += 2
+                else:
+                    i += 1
+            if codes:  # stop after finding codes in this or subsequent lines
+                break
+    return codes
 
 
 def _stitch_split_names(body: str) -> str:
@@ -172,22 +196,25 @@ def parse_sessional_pdf(pdf_path: str) -> tuple:
     # FIX: stitch names that got split across PDF lines before tokenising
     body = _stitch_split_names(body)
 
+    # Get subject codes from header (more reliable order)
+    header_codes = _find_header_codes(body)
+
     # Parse footer AFTER cutoff to get subject metadata
     subject_map = parse_subject_footer(text)
 
-    if not subject_map:
-        # FIX: fallback — try reading codes from header row
-        header_codes = _find_header_codes(body)
-        if header_codes:
-            subject_map = {code: (code, "N/A") for code in header_codes}
-
-    if not subject_map:
-        raise ValueError(
-            "Could not find subject footer table in sessional PDF. "
-            "Check that the PDF has the '# Course Code ...' section."
-        )
-
-    subject_codes = list(subject_map.keys())
+    if header_codes:
+        subject_codes = header_codes
+        # Merge with footer metadata if available
+        for code in subject_codes:
+            if code not in subject_map:
+                subject_map[code] = (code, "N/A")
+    else:
+        if not subject_map:
+            raise ValueError(
+                "Could not find subject footer table or header codes in sessional PDF. "
+                "Check that the PDF has the '# Course Code ...' section or header with subject codes."
+            )
+        subject_codes = list(subject_map.keys())
     subject_count = len(subject_codes)
 
     # FIX: load manual name overrides from CSV
@@ -232,33 +259,55 @@ def parse_sessional_pdf(pdf_path: str) -> tuple:
         name_mapping[usn] = student_name
 
         # --- Extract marks for each subject in order ---
+        # First, count consecutive digit tokens to detect format
+        digit_count = 0
+        j = i
+        while j < total and re.match(r'^\d+(\.\d+)?$', tokens[j]):
+            digit_count += 1
+            j += 1
+
         marks = []    # list of (mark_int, elected_bool)
 
-        for _ in range(subject_count):
-            if i >= total:
-                marks.append((0, False))
-                continue
-
-            if tokens[i] == "*":
-                # Elective NOT chosen by student
-                i += 1  # skip '*'
-                if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
-                    i += 1  # skip the attendance number that follows *
-                marks.append((0, False))
-            else:
-                # Normal subject: mark then att%
+        if digit_count == subject_count * 2 + 1:
+            # Format: mark att% ... total
+            for _ in range(subject_count):
+                if tokens[i] == "*":
+                    # Elective NOT chosen
+                    i += 1
+                    if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
+                        i += 1  # skip att%
+                    marks.append((0, False))
+                else:
+                    # Normal subject
+                    mark_val = 0
+                    if re.match(r'^\d+$', tokens[i]):
+                        mark_val = int(tokens[i])
+                        i += 1
+                    if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
+                        i += 1  # skip att%
+                    marks.append((mark_val, True))
+            # Skip total
+            if i < total and re.match(r'^\d+$', tokens[i]):
+                i += 1
+        elif digit_count == subject_count + 1:
+            # Format: mark ... total
+            for _ in range(subject_count):
                 mark_val = 0
-                if re.match(r'^\d+$', tokens[i]):
+                if i < total and re.match(r'^\d+$', tokens[i]):
                     mark_val = int(tokens[i])
                     i += 1
-                # Skip attendance %
-                if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
+                marks.append((mark_val, True))
+            # Skip total
+            if i < total and re.match(r'^\d+$', tokens[i]):
+                i += 1
+        else:
+            # Fallback: assume marks only
+            for _ in range(subject_count):
+                mark_val = 0
+                if i < total and re.match(r'^\d+$', tokens[i]):
+                    mark_val = int(tokens[i])
                     i += 1
                 marks.append((mark_val, True))
-
-        # Skip Total column (one final integer)
-        if i < total and re.match(r'^\d+$', tokens[i]):
-            i += 1
 
         # Build InternalRecord for each subject
         for idx, code in enumerate(subject_codes):
