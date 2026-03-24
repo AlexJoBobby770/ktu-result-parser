@@ -80,22 +80,6 @@ function Footer() {
               Built for faculty at AISAT, Ernakulam, Kerala.
             </p>
 
-            {/* Trust pills */}
-            <div className="fo__trust">
-              <span className="fo__trust-pill">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                </svg>
-                Firebase secured
-              </span>
-              <span className="fo__trust-pill">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-                Zero data retention
-              </span>
-            </div>
           </div>
 
           {/* Link columns */}
@@ -140,11 +124,6 @@ function Footer() {
           <span className="fo__copy">
             © {new Date().getFullYear()} KTU Result Parser · AISAT College of Engineering. All rights reserved.
           </span>
-          <div className="fo__bottom-links">
-            <a href="#" className="fo__bottom-link">Privacy</a>
-            <span className="fo__bottom-sep" />
-            <a href="#" className="fo__bottom-link">Terms</a>
-          </div>
         </div>
       </div>
 

@@ -13,9 +13,9 @@
 .hero__grid {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle, #c5e8d5 1px, transparent 1px);
+  background-image: radial-gradient(circle, #c5e8d5 1px, transparent 3px);
   background-size: 28px 28px;
-  opacity: 0.55;
+  opacity: 0.70;
   pointer-events: none;
   z-index: 0;
 }

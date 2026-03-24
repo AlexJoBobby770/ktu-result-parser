@@ -5,7 +5,6 @@ import "./HelpFaq.css";
 const FAQS = [
   {
     category: "Getting Started",
-    icon: "🚀",
     items: [
       {
         q: "What is KTU Processor?",
@@ -23,7 +22,6 @@ const FAQS = [
   },
   {
     category: "Uploading & Processing",
-    icon: "⚙️",
     items: [
       {
         q: "How do I upload my result PDF?",
@@ -45,7 +43,6 @@ const FAQS = [
   },
   {
     category: "Output & Download",
-    icon: "📊",
     items: [
       {
         q: "What does the output Excel file contain?",
@@ -63,7 +60,6 @@ const FAQS = [
   },
   {
     category: "Security & Privacy",
-    icon: "🔒",
     items: [
       {
         q: "Is my data safe?",
