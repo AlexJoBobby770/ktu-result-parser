@@ -327,13 +327,13 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
             <label className="us__extra-drop">
               <input
                 type="file"
-                accept=".pdf"
+                accept=".xlsx,.xls"
                 style={{ display: "none" }}
                 onChange={e => setExcelFile(e.target.files?.[0] || null)}
               />
               {excelFile ? (
                 <div className="us__extra-file">
-                  <div className="us__file-badge us__file-badge--sm">PDF</div>
+                  <div className="us__file-badge us__file-badge--sm">XLSX</div>
                   <div className="us__file-info">
                     <span className="us__file-name">{excelFile.name}</span>
                     <span className="us__file-meta">{formatBytes(excelFile.size)} · internal marks</span>

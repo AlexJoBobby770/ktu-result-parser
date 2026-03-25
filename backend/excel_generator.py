@@ -159,13 +159,18 @@ def _subject_analysis(ext_records, int_records, batch_year) -> pd.DataFrame:
 
     rows = []
     for code in sorted(code_grades):
-        grades   = code_grades[code]
-        appeared = len(grades)
-        if appeared == 0: continue
+        grades_raw = code_grades[code]
+        # Exclude FE/Absent/Withheld from appeared count (not considered present)
+        grades = [g for g in grades_raw if g not in {"FE", "Absent", "Withheld"}]
 
-        passed   = sum(1 for g in grades if g in PASSING_GRADES)
-        failed   = appeared - passed
-        pct      = round(passed / appeared * 100, 1)
+        appeared = len(grades)
+        if appeared == 0:
+            continue
+
+        passed = sum(1 for g in grades if g in PASSING_GRADES)
+        # AB (Absent) and any non-passing grade here are considered fail
+        failed = appeared - passed
+        pct = round(passed / appeared * 100, 1)
         name, faculty = meta.get(code, (code, "N/A"))
 
         if pct >= 90:   perf = "Excellent"
@@ -247,8 +252,12 @@ def generate_merged_excel(
     for r in int_records:
         int_lu[r.usn][r.course_code] = r
 
-    # USNs in the sessional PDF = one division only (e.g. CSA or CSB)
+    # USNs in the sessional Excel - filter ALL output to only these students
     sessional_usns = set(int_lu.keys())
+
+    # Filter external records to only students in sessional Excel
+    ext_records = [r for r in ext_records if r.usn in sessional_usns]
+    ext_dep = {usn: dept for usn, dept in ext_dep.items() if usn in sessional_usns}
 
     dept_usns = defaultdict(set)
     for usn, dept in ext_dep.items():
@@ -261,36 +270,27 @@ def generate_merged_excel(
 
         for dept in sorted(dept_usns):
             all_dept_usns = dept_usns[dept]
-            has_int = bool(all_dept_usns & sessional_usns)
-
-            # If sessional data exists for this dept, show only that division's students.
-            # Depts with no sessional data (CE, ME, etc.) show all their students.
-            if has_int:
-                usns = sorted(all_dept_usns & sessional_usns)
-            else:
-                usns = sorted(all_dept_usns)
+            # Since we already filtered to sessional_usns, all students here have sessional data
+            usns = sorted(all_dept_usns)
 
             subs     = sorted({c for u in usns for c in ext_lu[u]})
 
             rows = []
             for usn in usns:
                 eg  = ext_lu[usn]
-                id_ = int_lu.get(usn, {})
+                id_ = int_lu.get(usn, {})  # All students have sessional data now
                 row = {"Register No": usn, "Name": name_mapping.get(usn, "")}
                 arr, sgpa_g = [], {}
 
                 for code in subs:
                     grade = eg.get(code, "")
-                    if has_int:
-                        irec = id_.get(code)
-                        if irec and not irec.elected:
-                            row[f"{code} Internal"] = "—"
-                            row[f"{code} Grade"]    = "—"
-                            continue
-                        row[f"{code} Internal"] = irec.internal_mark if irec else ""
-                        row[f"{code} Grade"]    = grade
-                    else:
-                        row[code] = grade
+                    irec = id_.get(code)
+                    if irec and not irec.elected:
+                        row[f"{code} Internal"] = "—"
+                        row[f"{code} Grade"]    = "—"
+                        continue
+                    row[f"{code} Internal"] = irec.internal_mark if irec else ""
+                    row[f"{code} Grade"]    = grade
                     if grade:
                         sgpa_g[code] = grade
                         if grade not in PASSING_GRADES: arr.append(code)
@@ -301,10 +301,7 @@ def generate_merged_excel(
 
             pd.DataFrame(rows).to_excel(writer, sheet_name=dept, index=False, startrow=5)
             lbl = f" — Batch 20{batch_year}" if batch_year else ""
-            titles[dept] = (
-                f"{dept} — Internal + University Results{lbl}" if has_int
-                else f"{dept} — University Examination Results{lbl}"
-            )
+            titles[dept] = f"{dept} — Internal + University Results{lbl}"
 
         # Subject Analysis sheet
         if int_records:

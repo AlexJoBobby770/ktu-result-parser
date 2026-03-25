@@ -9,12 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from backend.pdf_parser import parse_ktu_pdf
-    from backend.internal_parser import parse_sessional_pdf
+    from backend.internal_parser import parse_sessional_excel
     from backend.excel_generator import generate_external_excel, generate_merged_excel
     from backend.models import PASSING_GRADES
 except ModuleNotFoundError:
     from pdf_parser import parse_ktu_pdf
-    from internal_parser import parse_sessional_pdf
+    from internal_parser import parse_sessional_excel
     from excel_generator import generate_external_excel, generate_merged_excel
     from models import PASSING_GRADES
 
@@ -80,12 +80,12 @@ async def upload_result(
     excel_path     = os.path.join(OUTPUT_DIR, excel_filename)
 
     if internal_file and internal_file.filename:
-        int_path = os.path.join(UPLOAD_DIR, f"{session_id}_sessional.pdf")
+        int_path = os.path.join(UPLOAD_DIR, f"{session_id}_sessional.xlsx")
         with open(int_path, "wb") as f:
             shutil.copyfileobj(internal_file.file, f)
 
-        print(f"[{session_id}] Parsing sessional PDF...")
-        internal_records, name_mapping, detected_year = parse_sessional_pdf(int_path)
+        print(f"[{session_id}] Parsing sessional Excel...")
+        internal_records, name_mapping, detected_year = parse_sessional_excel(int_path)
 
         effective_year = batch_year if batch_year else detected_year
         print(f"[{session_id}] Batch year: 20{effective_year}")
