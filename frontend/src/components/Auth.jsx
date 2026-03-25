@@ -44,14 +44,7 @@ function Auth({ onAuthSuccess }) {
         <div className="au__blob au__blob--2" aria-hidden="true" />
 
         <div className="au__left-content">
-
-          {/* Logo */}
-          <div className="au__left-logo">
-            <div className="au__left-logo-box">
-              <img src={logo} alt="AISAT" className="au__left-logo-img" />
-            </div>
-          </div>
-
+      
           {/* College name */}
           <div className="au__left-brand">
             <h1 className="au__left-title">AISAT</h1>
@@ -180,14 +173,6 @@ function Auth({ onAuthSuccess }) {
               </div>
             ))}
           </div>
-
-          {/* Fine print */}
-          <p className="au__footnote">
-            Only AISAT Google accounts are authorised.
-            By signing in you agree to our&nbsp;
-            <a href="#" className="au__footnote-link">Terms</a> and&nbsp;
-            <a href="#" className="au__footnote-link">Privacy Policy</a>.
-          </p>
 
         </div>
       </div>

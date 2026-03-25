@@ -67,8 +67,8 @@ function Navbar({ currentUser, backendStatus, onLogout, uploadSectionRef }) {
 
             {/* Title — short and strong */}
             <div className="nb__brand-copy">
-              <span className="nb__brand-title">Result&nbsp;Portal</span>
-              <span className="nb__brand-college">AISAT · Ernakulam</span>
+              <span className="nb__brand-title">Result&nbsp;Parser</span>
+              <span className="nb__brand-college">AISAT, Ernakulam</span>
             </div>
           </Link>
 
