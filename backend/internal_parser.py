@@ -1,6 +1,6 @@
 # backend/internal_parser.py
 import re
-import pandas as pd
+import pdfplumber
 
 try:
     from backend.models import InternalRecord
@@ -9,93 +9,91 @@ except ModuleNotFoundError:
 
 USN_PATTERN    = re.compile(r'^((?:AIK|LAIK|SGI|SPT|GWE|MZW|MET)\d{2}[A-Z]{2,3}\d{3})$')
 SUBJECT_CODE   = re.compile(r'^[A-Z]{2,8}\d{3}$')
+FOOTER_PATTERN = re.compile(
+    r'^\d+\s+([A-Z]{2,8}\d{3})\s+(.+?)\s+((?:Ms\.|Mr\.|Dr\.)\s+\S.+)$'
+)
+
+# Allow fallback footer lines without honorifics to support different PDF formatting.
+FOOTER_FALLBACK = re.compile(r'^\d+\s+([A-Z]{2,8}\d{3})\s+(.+?)\s+(.+)$')
 
 
-def parse_subject_metadata(excel_path: str) -> dict:
+# FIX: Changed [A-Z]{2,4} → [A-Z]{2,8} to match long 2024-scheme course codes
+# like GAMAT301, PCCST302, UCHUT346
+FOOTER_PATTERN = re.compile(
+    r'^\d+\s+([A-Z]{2,8}\d{3})\s+(.+?)\s+((?:Ms\.|Mr\.|Dr\.)\s+\S.+)$'
+)
+
+# FIX: Added MET prefix to USN pattern (seen in some college PDFs)
+USN_PATTERN = re.compile(r'^((?:AIK|LAIK|SGI|SPT|GWE|MZW|MET)\d{2}[A-Z]{2}\d{3})$')
+
+
+def extract_text(pdf_path: str) -> str:
+    text = ""
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            t = page.extract_text()
+            if t:
+                text += t + "\n"
+    return text
+
+
+def parse_subject_footer(text: str) -> dict:
     """
-    Parse the subject metadata from the bottom of the Excel sheet.
-    Expected format: rows like "1 CST301 Formal Languages and Automata Theory Ms. A. Thilakavathi"
-    Returns { "CST301": ("Formal Languages and Automata Theory", "Ms. A. Thilakavathi"), ... }
+    Parse the footer table at the bottom of the sessional PDF.
+    Returns { "CST401": ("ARTIFICIAL INTELLIGENCE", "Ms. NISY JOHN PANICKER"), ... }
+    One entry per unique subject code (multiple faculty lines are merged).
     """
-    sheet_name = _find_data_sheet(excel_path)
-    df = pd.read_excel(excel_path, sheet_name=sheet_name, header=None)
-    
     subject_map = {}
-    # Look for rows that start with numbers (subject numbering)
-    for _, row in df.iterrows():
-        first_cell = str(row.iloc[0]).strip()
-        if first_cell.isdigit():
-            # Check if it looks like subject metadata
-            row_str = ' '.join(str(x) for x in row if pd.notna(x))
-            # Pattern: number CODE Subject Name Faculty
-            parts = row_str.split()
-            if len(parts) >= 4 and re.match(r'^[A-Z]{2,8}\d{3}$', parts[1]):
-                code = parts[1]
-                # Find where faculty starts (usually "Ms." or "Mr." or "Dr.")
-                faculty_start = -1
-                for i, part in enumerate(parts[2:], 2):
-                    if re.match(r'^(Ms\.|Mr\.|Dr\.)', part):
-                        faculty_start = i
-                        break
-                if faculty_start > 0:
-                    subject_name = ' '.join(parts[2:faculty_start])
-                    faculty = ' '.join(parts[faculty_start:])
-                    subject_map[code] = (subject_name, faculty)
-    
+
+    for line in text.split("\n"):
+        m = FOOTER_PATTERN.match(line.strip())
+        if not m:
+            continue
+
+        code    = m.group(1).strip()
+        name    = m.group(2).strip()
+        faculty = m.group(3).strip()
+
+        if code not in subject_map:
+            subject_map[code] = (name, faculty)
+        else:
+            # Multiple faculty for same subject — append name
+            existing_name, existing_faculty = subject_map[code]
+            subject_map[code] = (existing_name, f"{existing_faculty}, {faculty}")
+
     return subject_map
 
 
-def _find_data_sheet(excel_path: str) -> str:
+def _find_header_codes(text: str) -> list:
     """
-    Find the sheet containing student data by looking for patterns.
-    Returns the sheet name with the most student records.
+    Fallback: scan the header row for course codes when no footer table exists.
+    Looks for the line containing 'Reg no' or 'Roll No', then extracts course codes
+    from that line and subsequent lines until codes are found.
+    Handles cases where codes are split across tokens (e.g. 'CST30 1' -> 'CST301').
+    Returns ordered list of codes, or empty list if nothing found.
     """
-    xl = pd.ExcelFile(excel_path)
-    best_sheet = xl.sheet_names[0]
-    max_students = 0
-    
-    for sheet_name in xl.sheet_names:
-        try:
-            df = pd.read_excel(excel_path, sheet_name=sheet_name, header=None, nrows=10)
-            # Look for rows that look like student data (USN pattern in column 1)
-            student_count = 0
-            for _, row in df.iterrows():
-                if len(row) > 1:
-                    cell_val = str(row.iloc[1]).strip()
-                    if USN_PATTERN.match(cell_val):
-                        student_count += 1
-            if student_count > max_students:
-                max_students = student_count
-                best_sheet = sheet_name
-        except:
-            continue
-    
-    return best_sheet
-
-
-def _find_subject_codes(excel_path: str) -> list:
-    """
-    Find subject codes from the header row in the Excel.
-    Looks for row 4 (index 4) which contains subject codes after "Name of student"
-    Handles split codes like 'CST30 1' -> 'CST301'
-    """
-    sheet_name = _find_data_sheet(excel_path)
-    df = pd.read_excel(excel_path, sheet_name=sheet_name, header=None)
-    
-    # Row 4 (index 4) should contain the headers
-    if len(df) > 4:
-        header_row = df.iloc[4]
-        subject_codes = []
-        # Columns 3-10: subject codes
-        for cell in header_row.iloc[3:11]:  # Up to but not including column 11 (Total)
-            if pd.notna(cell):
-                cell_str = str(cell).strip().replace(' ', '')  # Remove spaces
-                # Extract subject code if it matches pattern
-                match = re.search(r'^([A-Z]{2,8}\d{3})', cell_str)
-                if match:
-                    subject_codes.append(match.group(1))
-        return subject_codes
-    return []
+    codes = []
+    header_found = False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not header_found and ("Reg no" in stripped or "Roll No" in stripped):
+            header_found = True
+        if header_found:
+            tokens = stripped.split()
+            i = 0
+            while i < len(tokens):
+                token = tokens[i]
+                if SUBJECT_CODE.match(token):
+                    codes.append(token)
+                    i += 1
+                elif i+1 < len(tokens) and SUBJECT_CODE.match(token + tokens[i+1]):
+                    codes.append(token + tokens[i+1])
+                    i += 2
+                else:
+                    i += 1
+            if codes:  # stop after finding codes in this or subsequent lines
+                break
+    return codes
 
 
 def _stitch_split_names(body: str) -> str:
@@ -133,6 +131,9 @@ def _stitch_split_names(body: str) -> str:
                 i += 1  # skip the continuation line
         result.append(line)
         i += 1
+    return "\n".join(result)
+
+
 def _load_name_overrides() -> dict:
     """
     Load manual name corrections from backend/data/name_overrides.csv.
@@ -158,109 +159,161 @@ def _load_name_overrides() -> dict:
     return overrides
 
 
-def detect_batch_year(excel_path: str) -> str:
+def detect_batch_year(text: str) -> str:
     """
-    Extract 2-digit batch year from Excel.
-    Try to find in a cell containing 'Batch' or from filename.
+    Extract 2-digit batch year from sessional PDF header.
+    e.g. 'Batch & Semester :2022-2026 S7'  →  '22'
     Returns '' if not found.
     """
-    try:
-        xl = pd.ExcelFile(excel_path)
-        for sheet in xl.sheet_names:
-            df = pd.read_excel(excel_path, sheet_name=sheet, nrows=10)  # Read first 10 rows
-            for _, row in df.iterrows():
-                for cell in row:
-                    cell_str = str(cell)
-                    m = re.search(r'Batch.*?:(\d{4})-\d{4}', cell_str)
-                    if m:
-                        return m.group(1)[2:]   # '2022' → '22'
-    except:
-        pass
-    # Fallback: try filename
-    filename = os.path.basename(excel_path)
-    m = re.search(r'(\d{2})', filename)
+    m = re.search(r'Batch.*?:(\d{4})-\d{4}', text)
     if m:
-        return m.group(1)
+        return m.group(1)[2:]   # '2022' → '22'
     return ''
 
 
-def parse_sessional_excel(excel_path: str) -> tuple:
+def parse_sessional_pdf(pdf_path: str) -> tuple:
     """
-    Parse the college sessional marks Excel.
-
-    Expected format (based on sample):
-    - Sheet 'Table 1': 
-      - Row 2: Batch info like "Branch :CSE  B Batch & Semester :2023-2027  S5"
-      - Row 4: Headers: Roll No, Reg no, Name of student, CST301, CST303, ..., Total
-      - Rows 5+: Student data: roll, USN, name, marks for each subject
-      - Bottom rows: Subject metadata like "1 CST301 Formal Languages and Automata Theory Ms. A. Thilakavathi"
+    Parse the college sessional marks PDF.
 
     Returns:
         records     : list of InternalRecord
         name_mapping: { usn: student_name }
         batch_year  : 2-digit string e.g. '23'
+
+    How electives work in the PDF:
+        Subjects are listed left-to-right in the header row.
+        Each subject has TWO columns: Mark and Att%.
+        For a skipped elective the Mark column contains '*'
+        and the Att% column contains a number (0 or 100).
+        We use elected=False for those records and internal_mark=0.
     """
-    # Get subject codes from headers
-    subject_codes = _find_subject_codes(excel_path)
+    text = extract_text(pdf_path)
+
+    # Cut text before footer stats so "Class Average" etc. don't confuse parsing
+    cutoff = text.find("Class Average")
+    body   = text[:cutoff] if cutoff > 0 else text
+
+    # FIX: stitch names that got split across PDF lines before tokenising
+    body = _stitch_split_names(body)
+
+    # Get subject codes from header (more reliable order)
+    header_codes = _find_header_codes(body)
+
+    # Parse footer AFTER cutoff to get subject metadata
+    subject_map = parse_subject_footer(text)
+
+    if header_codes:
+        subject_codes = header_codes
+        # Merge with footer metadata if available
+        for code in subject_codes:
+            if code not in subject_map:
+                subject_map[code] = (code, "N/A")
+    else:
+        if not subject_map:
+            raise ValueError(
+                "Could not find subject footer table or header codes in sessional PDF. "
+                "Check that the PDF has the '# Course Code ...' section or header with subject codes."
+            )
+        subject_codes = list(subject_map.keys())
     subject_count = len(subject_codes)
 
-    # Get subject metadata
-    subject_map = parse_subject_metadata(excel_path)
-
-    # Merge with metadata
-    for code in subject_codes:
-        if code not in subject_map:
-            subject_map[code] = (code, "N/A")
-
-    # Load name overrides
+    # FIX: load manual name overrides from CSV
     name_overrides = _load_name_overrides()
 
-    # Read the full data
-    sheet_name = _find_data_sheet(excel_path)
-    df = pd.read_excel(excel_path, sheet_name=sheet_name, header=None)
-
-    records = []
+    records      = []
     name_mapping = {}
 
-    # Data starts from row 5 (index 5)
-    for idx in range(5, len(df)):
-        row = df.iloc[idx]
-        
-        # Skip if first cell is not a number (roll number)
-        roll_cell = str(row.iloc[0]).strip()
-        if not roll_cell.isdigit():
-            continue
-            
-        usn = str(row.iloc[1]).strip().upper()
-        if not USN_PATTERN.match(usn):
-            continue  # Skip invalid rows
+    tokens = body.split()
+    i      = 0
+    total  = len(tokens)
 
-        student_name = str(row.iloc[2]).strip()
-        # Apply override
+    while i < total:
+        token = tokens[i]
+
+        # Skip roll number (pure integer)
+        if re.match(r'^\d{1,3}$', token):
+            i += 1
+            continue
+
+        # Detect USN
+        if not USN_PATTERN.match(token):
+            i += 1
+            continue
+
+        usn = token
+        i += 1
+
+        # --- Extract student name ---
+        # Name tokens are uppercase alphabetic words (may include spaces)
+        # Stop when we hit a number (first mark value)
+        name_parts = []
+        while i < total and not re.match(r'^\d+(\.\d+)?$', tokens[i]):
+            name_parts.append(tokens[i])
+            i += 1
+        student_name = " ".join(name_parts).strip()
+
+        # Apply manual override if present
         if usn in name_overrides:
             student_name = name_overrides[usn]
+
         name_mapping[usn] = student_name
 
-        # Marks start from column 3, up to subject_count
-        for subj_idx, code in enumerate(subject_codes):
-            col_idx = 3 + subj_idx
-            if col_idx >= len(row):
-                mark = 0
-                elected = False
-            else:
-                mark_val = row.iloc[col_idx]
-                if pd.isna(mark_val) or str(mark_val).strip() in ('*', ''):
-                    mark = 0
-                    elected = False
-                else:
-                    try:
-                        mark = int(float(mark_val))
-                        elected = True
-                    except:
-                        mark = 0
-                        elected = False
+        # --- Extract marks for each subject in order ---
+        # First, count consecutive digit tokens to detect format
+        digit_count = 0
+        j = i
+        while j < total and re.match(r'^\d+(\.\d+)?$', tokens[j]):
+            digit_count += 1
+            j += 1
 
+        marks = []    # list of (mark_int, elected_bool)
+
+        if digit_count == subject_count * 2 + 1:
+            # Format: mark att% ... total
+            for _ in range(subject_count):
+                if tokens[i] == "*":
+                    # Elective NOT chosen
+                    i += 1
+                    if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
+                        i += 1  # skip att%
+                    marks.append((0, False))
+                else:
+                    # Normal subject
+                    mark_val = 0
+                    if re.match(r'^\d+$', tokens[i]):
+                        mark_val = int(tokens[i])
+                        i += 1
+                    if i < total and re.match(r'^\d+(\.\d+)?$', tokens[i]):
+                        i += 1  # skip att%
+                    marks.append((mark_val, True))
+            # Skip total
+            if i < total and re.match(r'^\d+$', tokens[i]):
+                i += 1
+        elif digit_count == subject_count + 1:
+            # Format: mark ... total
+            for _ in range(subject_count):
+                mark_val = 0
+                if i < total and re.match(r'^\d+$', tokens[i]):
+                    mark_val = int(tokens[i])
+                    i += 1
+                marks.append((mark_val, True))
+            # Skip total
+            if i < total and re.match(r'^\d+$', tokens[i]):
+                i += 1
+        else:
+            # Fallback: assume marks only
+            for _ in range(subject_count):
+                mark_val = 0
+                if i < total and re.match(r'^\d+$', tokens[i]):
+                    mark_val = int(tokens[i])
+                    i += 1
+                marks.append((mark_val, True))
+
+        # Build InternalRecord for each subject
+        for idx, code in enumerate(subject_codes):
             subject_name, faculty_name = subject_map[code]
+            mark, elected = marks[idx] if idx < len(marks) else (0, False)
+
             records.append(InternalRecord(
                 usn=usn,
                 student_name=student_name,
@@ -271,5 +324,5 @@ def parse_sessional_excel(excel_path: str) -> tuple:
                 elected=elected,
             ))
 
-    batch_year = detect_batch_year(excel_path)
+    batch_year = detect_batch_year(text)
     return records, name_mapping, batch_year

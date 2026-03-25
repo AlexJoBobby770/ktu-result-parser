@@ -81,10 +81,16 @@ def parse_department_block(dept: str, block: str) -> list:
         end = usn_matches[i + 1].start() if i + 1 < len(usn_matches) else len(block)
         student_line = block[start:end]
 
+        effective_dept = dept
+        # Force transferred/aiml USNs into AIML regardless of PDF main department block.
+        if re.match(r'^[A-Z]{2,4}\d{2}AM\d{3}$', usn, re.IGNORECASE):
+            effective_dept = 'AIML'
+
+        # Keep schema for SCMB/LAIK etc; user IDs should be included as-is.
         for course_code, grade in GRADE_PATTERN.findall(student_line):
             records.append(ExternalRecord(
                 usn=usn,
-                department=dept,
+                department=effective_dept,
                 course_code=course_code,
                 grade=grade.strip(),
             ))
