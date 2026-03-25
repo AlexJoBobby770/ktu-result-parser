@@ -91,20 +91,20 @@ function Hero({ onScrollToUpload }) {
               {/* Header row */}
               <div className="hero__row hero__row--head">
                 <div className="hero__cell hero__cell--n">#</div>
-                {["Roll No", "Name", "CS301", "CS303", "CS305", "MA301", "EC301", "SGPA", "Result"].map(h => (
+                {["Roll No", "Name", "CST301", "CST303", "CST305", "MAT301", "HUT300", "SGPA", "Result"].map(h => (
                   <div key={h} className="hero__cell hero__cell--h">{h}</div>
                 ))}
               </div>
 
               {/* Data */}
               {[
-                { n:1, roll:"AIE20CS001", name:"Arun Mathew",    g:["A+","A", "B+","A", "A+"], sgpa:"9.2", pass:true  },
-                { n:2, roll:"AIE20CS002", name:"Bhavya Nair",    g:["A", "A+","A", "B+","A" ], sgpa:"8.9", pass:true  },
-                { n:3, roll:"AIE20CS003", name:"Christy Jose",   g:["B+","B", "A", "A", "B+"], sgpa:"8.4", pass:true  },
-                { n:4, roll:"AIE20CS004", name:"Devika Suresh",  g:["A+","A+","A+","A+","A+"], sgpa:"9.8", pass:true  },
-                { n:5, roll:"AIE20CS005", name:"Edwin Thomas",   g:["C", "B", "C+","B", "C" ], sgpa:"6.1", pass:false },
-                { n:6, roll:"AIE20CS006", name:"Fathima Riyaz",  g:["A", "B+","A", "A", "A" ], sgpa:"8.7", pass:true  },
-                { n:7, roll:"AIE20CS007", name:"George Philip",  g:["B", "B+","B", "B+","B" ], sgpa:"7.6", pass:true  },
+                { n:1, roll:"AIK20CS001", name:"Arun Mathew",    g:["A+","A", "B+","A", "A+"], sgpa:"9.2", pass:true  },
+                { n:2, roll:"AIK20CS002", name:"Bhavya Nair",    g:["A", "A+","A", "B+","A" ], sgpa:"8.9", pass:true  },
+                { n:3, roll:"AIK20CS003", name:"Christy Jose",   g:["B+","B", "A", "A", "B+"], sgpa:"8.4", pass:true  },
+                { n:4, roll:"AIK20CS004", name:"Devika Suresh",  g:["A+","A+","A+","A+","A+"], sgpa:"9.8", pass:true  },
+                { n:5, roll:"AIK20CS005", name:"Edwin Thomas",   g:["C", "B", "C+","B", "C" ], sgpa:"6.1", pass:false },
+                { n:6, roll:"AIK20CS006", name:"Fathima Riyaz",  g:["A", "B+","A", "A", "A" ], sgpa:"8.7", pass:true  },
+                { n:7, roll:"AIK20CS007", name:"George Philip",  g:["B", "B+","B", "B+","B" ], sgpa:"7.6", pass:true  },
               ].map(row => (
                 <div key={row.n} className={`hero__row${!row.pass ? " hero__row--fail" : ""}`}>
                   <div className="hero__cell hero__cell--n">{row.n}</div>

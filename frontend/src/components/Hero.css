@@ -13,9 +13,9 @@
 .hero__grid {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle, #c5e8d5 1px, transparent 1px);
+  background-image: radial-gradient(circle, #c5e8d5 1px, transparent 3px);
   background-size: 28px 28px;
-  opacity: 0.55;
+  opacity: 0.45;
   pointer-events: none;
   z-index: 0;
 }
@@ -87,7 +87,7 @@
 /* ── Headline ────────────────────────────────────────────── */
 .hero__headline {
   font-family: "Sora", "DM Sans", sans-serif;
-  font-size: clamp(2.4rem, 5.5vw, 4rem);
+  font-size: clamp(2.8rem, 5.9vw, 4rem);
   font-weight: 800;
   line-height: 1.12;
   letter-spacing: -0.03em;

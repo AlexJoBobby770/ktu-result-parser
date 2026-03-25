@@ -4,108 +4,127 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 
 function Navbar({ currentUser, backendStatus, onLogout, uploadSectionRef }) {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate   = useNavigate();
+  const location   = useLocation();
+  const [elevated, setElevated]   = useState(false);
+  const [dropOpen, setDropOpen]   = useState(false);
+  const [menuOpen, setMenuOpen]   = useState(false);
+  const dropRef = useRef(null);
 
-  const [scrolled, setScrolled]       = useState(false);
-  const [dropdownOpen, setDropdown]   = useState(false);
-  const [mobileOpen, setMobile]       = useState(false);
-  const dropdownRef                   = useRef(null);
-
-  /* ── scroll shadow ── */
+  /* Elevate on scroll */
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    const fn = () => setElevated(window.scrollY > 6);
+    window.addEventListener("scroll", fn, { passive: true });
+    return () => window.removeEventListener("scroll", fn);
   }, []);
 
-  /* ── close dropdown on outside click ── */
+  /* Close dropdown on outside click */
   useEffect(() => {
-    const onOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target))
-        setDropdown(false);
+    const fn = (e) => {
+      if (dropRef.current && !dropRef.current.contains(e.target))
+        setDropOpen(false);
     };
-    document.addEventListener("mousedown", onOutside);
-    return () => document.removeEventListener("mousedown", onOutside);
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
   }, []);
 
-  /* ── close mobile drawer on route change ── */
-  useEffect(() => setMobile(false), [location.pathname]);
+  /* Close drawer on route change */
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
+  /* Build initials from display name */
   const initials = currentUser
     ? currentUser.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
     : "U";
 
   const scrollToUpload = () => {
-    setMobile(false);
+    setMenuOpen(false);
     if (location.pathname !== "/") {
       navigate("/");
-      setTimeout(() => uploadSectionRef?.current?.scrollIntoView({ behavior: "smooth" }), 130);
+      setTimeout(
+        () => uploadSectionRef?.current?.scrollIntoView({ behavior: "smooth" }),
+        150
+      );
     } else {
       uploadSectionRef?.current?.scrollIntoView({ behavior: "smooth" });
     }
   };
 
-  const isLive = backendStatus === "connected";
 
   return (
     <>
-      {/* ══════════════════════════════════════ NAVBAR ══════════════════════════════════════ */}
-      <header className={`nb${scrolled ? " nb--raised" : ""}`}>
-        <div className="nb__wrap">
+      <header className={`nb${elevated ? " nb--elevated" : ""}`}>
+        <div className="nb__rail">
 
-          {/* ─── Logo ─────────────────────────────────────────── */}
-          <Link to="/" className="nb__logo">
-            <div className="nb__logo-img-box">
+          {/* ════ BRAND ════ */}
+          <Link to="/" className="nb__brand">
+            {/* Logo — large, anchored, clearly visible */}
+            <div className="nb__logo-frame">
               <img src={logo} alt="AISAT" className="nb__logo-img" />
             </div>
-            <div className="nb__logo-sep" />
-            <div className="nb__logo-copy">
-              <span className="nb__logo-product">KTU Result Parser</span>
-              <span className="nb__logo-sub">Result within seconds</span>
+
+            {/* Divider */}
+            <div className="nb__brand-sep" aria-hidden="true" />
+
+            {/* Title — short and strong */}
+            <div className="nb__brand-copy">
+              <span className="nb__brand-title">Result&nbsp;Portal</span>
+              <span className="nb__brand-college">AISAT · Ernakulam</span>
             </div>
           </Link>
 
-          {/* ─── Desktop nav links ────────────────────────────── */}
-          <nav className="nb__links">
-            <button className="nb__link" onClick={scrollToUpload}>Upload</button>
-            <Link   className="nb__link" to="/help">Help &amp; FAQ</Link>
+          {/* ════ NAV LINKS ════ */}
+          <nav className="nb__nav" aria-label="Primary navigation">
+            <button className="nb__nav-link" onClick={scrollToUpload}>
+              Upload
+            </button>
+            <Link className="nb__nav-link" to="/help">
+              Help
+            </Link>
           </nav>
 
-          {/* ─── Right-side cluster ───────────────────────────── */}
-          <div className="nb__right">
+          {/* ════ RIGHT CLUSTER ════ */}
+          <div className="nb__end">
 
-            {/* Primary CTA */}
+
+            {/* Upload CTA */}
             <button className="nb__cta" onClick={scrollToUpload}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <polyline points="16 16 12 12 8 16" />
-                <line x1="12" y1="12" x2="12" y2="21" />
-                <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-              </svg>
               Upload PDF
+              <svg
+                width="12" height="12" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor"
+                strokeWidth="2.5" strokeLinecap="round"
+              >
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
             </button>
 
-            {/* User avatar + dropdown */}
-            <div className="nb__user" ref={dropdownRef}>
+            {/* Avatar dropdown */}
+            <div className="nb__user" ref={dropRef}>
               <button
                 className="nb__avatar-btn"
-                onClick={() => setDropdown((v) => !v)}
-                aria-expanded={dropdownOpen}
-                aria-label="Account"
+                onClick={() => setDropOpen((v) => !v)}
+                aria-expanded={dropOpen}
+                aria-haspopup="true"
+                aria-label="Account menu"
               >
                 <span className="nb__avatar">{initials}</span>
                 <svg
-                  className={`nb__chevron${dropdownOpen ? " nb__chevron--up" : ""}`}
-                  width="11" height="11" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                  className={`nb__avatar-chevron${dropOpen ? " nb__avatar-chevron--open" : ""}`}
+                  width="11" height="11" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor"
+                  strokeWidth="2.5" strokeLinecap="round"
                 >
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
 
               {/* Dropdown panel */}
-              <div className={`nb__drop${dropdownOpen ? " nb__drop--open" : ""}`}>
+              <div
+                className={`nb__drop${dropOpen ? " nb__drop--open" : ""}`}
+                role="menu"
+              >
+                {/* Header */}
                 <div className="nb__drop-head">
                   <div className="nb__drop-avatar">{initials}</div>
                   <div className="nb__drop-info">
@@ -114,12 +133,13 @@ function Navbar({ currentUser, backendStatus, onLogout, uploadSectionRef }) {
                   </div>
                 </div>
 
-                <div className="nb__drop-divider" />
+                <div className="nb__drop-rule" />
 
                 <Link
-                  className="nb__drop-item"
                   to="/help"
-                  onClick={() => setDropdown(false)}
+                  className="nb__drop-item"
+                  role="menuitem"
+                  onClick={() => setDropOpen(false)}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                        stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -132,7 +152,8 @@ function Navbar({ currentUser, backendStatus, onLogout, uploadSectionRef }) {
 
                 <button
                   className="nb__drop-item nb__drop-item--danger"
-                  onClick={() => { setDropdown(false); onLogout(); }}
+                  role="menuitem"
+                  onClick={() => { setDropOpen(false); onLogout(); }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                        stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -146,42 +167,57 @@ function Navbar({ currentUser, backendStatus, onLogout, uploadSectionRef }) {
             </div>
           </div>
 
-          {/* ─── Mobile hamburger ─────────────────────────────── */}
+          {/* ════ HAMBURGER ════ */}
           <button
-            className={`nb__burger${mobileOpen ? " nb__burger--open" : ""}`}
-            onClick={() => setMobile((v) => !v)}
-            aria-label="Toggle menu"
+            className={`nb__burger${menuOpen ? " nb__burger--open" : ""}`}
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
           >
             <span /><span /><span />
           </button>
         </div>
 
-        {/* ══ Mobile slide-down drawer ══ */}
-        <div className={`nb__drawer${mobileOpen ? " nb__drawer--open" : ""}`}>
+        {/* ════ MOBILE DRAWER ════ */}
+        <div
+          className={`nb__drawer${menuOpen ? " nb__drawer--open" : ""}`}
+          aria-hidden={!menuOpen}
+        >
           <div className="nb__drawer-user">
-            <div className="nb__drop-avatar" style={{ width: 40, height: 40 }}>{initials}</div>
+            <div className="nb__drop-avatar" style={{ width: 42, height: 42, fontSize: "0.85rem" }}>
+              {initials}
+            </div>
             <div>
-              <p className="nb__drop-name">{currentUser || "Account"}</p>
+              <p className="nb__drop-name">{currentUser}</p>
               <p className="nb__drop-role">Faculty Member</p>
             </div>
           </div>
 
-          <div className="nb__drawer-divider" />
+          <div className="nb__drawer-rule" />
 
-          <button className="nb__drawer-link" onClick={scrollToUpload}>Upload</button>
-          <Link   className="nb__drawer-link" to="/help">Help &amp; FAQ</Link>
+          <button className="nb__drawer-link" onClick={scrollToUpload}>
+            Upload
+          </button>
+          <Link className="nb__drawer-link" to="/help">
+            Help &amp; FAQ
+          </Link>
 
-          <div className="nb__drawer-divider" />
+          <div className="nb__drawer-rule" />
 
-          <button className="nb__drawer-cta"     onClick={scrollToUpload}>Upload PDF</button>
-          <button className="nb__drawer-signout" onClick={() => { setMobile(false); onLogout(); }}>
+          <button className="nb__drawer-cta" onClick={scrollToUpload}>
+            Upload PDF
+          </button>
+          <button
+            className="nb__drawer-signout"
+            onClick={() => { setMenuOpen(false); onLogout(); }}
+          >
             Sign Out
           </button>
         </div>
       </header>
 
-      {/* Spacer so page content starts below the fixed bar */}
-      <div className="nb__spacer" />
+      {/* Spacer so page content clears the fixed bar */}
+      <div className="nb__spacer" aria-hidden="true" />
     </>
   );
 }

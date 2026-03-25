@@ -1,208 +1,257 @@
+import { useEffect, useRef } from "react";
 import "./Features.css";
 
-/* ── Icon components ──────────────────────────────────────── */
-const IconPDF = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-    <polyline points="14 2 14 8 20 8"/>
-    <line x1="16" y1="13" x2="8" y2="13"/>
-    <line x1="16" y1="17" x2="8" y2="17"/>
-  </svg>
-);
-const IconSheet = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2"/>
-    <path d="M3 9h18M3 15h18M9 3v18"/>
-  </svg>
-);
-const IconMerge = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
-    <path d="M6 9v6M18 15V9a6 6 0 0 0-6-6H9"/>
-  </svg>
-);
-const IconLock = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-  </svg>
-);
-const IconSpeed = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-  </svg>
-);
-const IconCheck = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+/* ─── SVG Icons ──────────────────────────────────────────── */
+const IconCheck = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
     <polyline points="22 4 12 14.01 9 11.01"/>
   </svg>
 );
-
-/* ── Small checkmark for bullet lists ────────────────────── */
-const Tick = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <polyline points="20 6 9 17 4 12"/>
+const IconShield = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  </svg>
+);
+const IconMerge = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+    <path d="M6 9v6M18 15V9a6 6 0 0 0-6-6H9"/>
+  </svg>
+);
+const IconGrid = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7"/>
+    <rect x="14" y="3" width="7" height="7"/>
+    <rect x="14" y="14" width="7" height="7"/>
+    <rect x="3" y="14" width="7" height="7"/>
   </svg>
 );
 
-/* ════════════════════════════════════════════════════════════
-   FEATURE CARDS DATA
-   ════════════════════════════════════════════════════════════ */
-const CARDS = [
-  {
-    icon: <IconPDF />,
-    color: "red",
-    title: "Reads any KTU PDF",
-    text: "Handles all semesters and departments. No reformatting or pre-processing needed — just upload and go.",
-  },
-  {
-    icon: <IconSheet />,
-    color: "green",
-    title: "Structured Excel output",
-    text: "Every student, subject, and grade lands in the right column. Clean headers, consistent formatting, ready to share.",
-  },
-  {
-    icon: <IconMerge />,
-    color: "blue",
-    title: "Internal marks merge",
-    text: "Upload a second PDF of internal marks and the parser combines both into a single unified workbook automatically.",
-  },
-  {
-    icon: <IconLock />,
-    color: "amber",
-    title: "Zero data retention",
-    text: "Files are processed in-memory and discarded immediately. Nothing is stored, logged, or shared after your download.",
-  },
-  {
-    icon: <IconSpeed />,
-    color: "purple",
-    title: "Under 5 seconds",
-    text: "The entire parse-to-download pipeline runs in seconds — not minutes. Fast enough for live use in the exam office.",
-  },
-  {
-    icon: <IconCheck />,
-    color: "teal",
-    title: "100% grade accuracy",
-    text: "Grades, SGPA, and result status are validated against KTU's published schema so nothing slips through.",
-  },
+/* ─── Excel row data ─────────────────────────────────────── */
+const ROWS = [
+  { roll: "AIK100", name: "Arun M.",   sgpa: "9.2", pass: true  },
+  { roll: "AIK101", name: "Bhavya N.", sgpa: "8.9", pass: true  },
+  { roll: "AIK102", name: "Edwin T.",  sgpa: "6.1", pass: false },
+  { roll: "AIK103", name: "Devika S.", sgpa: "9.8", pass: true  },
 ];
+
+const SEMESTERS = ["S1","S2","S3","S4","S5","S6","S7","S8"];
 
 /* ════════════════════════════════════════════════════════════
    COMPONENT
    ════════════════════════════════════════════════════════════ */
-function Features() {
+export default function Features() {
+  const ref = useRef(null);
+
+  /* IntersectionObserver — add visible class card-by-card */
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("ft__card--visible");
+            io.unobserve(e.target);
+          }
+        }),
+      { threshold: 0.1 }
+    );
+    ref.current?.querySelectorAll(".ft__card").forEach((c) => io.observe(c));
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <section className="ft" id="features">
+    <section className="ft" id="features" ref={ref}>
+
+      {/* Ambient background decoration */}
+      <div className="ft__ambient ft__ambient--tl" aria-hidden="true" />
+      <div className="ft__ambient ft__ambient--br" aria-hidden="true" />
+
       <div className="ft__container">
 
-        {/* ── Section header ── */}
-        <div className="ft__header">
-          <p className="ft__eyebrow">Why faculty love it</p>
+        {/* ─── Section header ──────────────────────────────── */}
+        <header className="ft__header">
+          <span className="ft__eyebrow">Built for faculty</span>
           <h2 className="ft__headline">
-            Everything you need.<br />
-            <span className="ft__headline-accent">Nothing you don't.</span>
+            Every feature<br />has a reason.
           </h2>
           <p className="ft__sub">
-            Built specifically for AISAT faculty — every feature maps to a real
-            pain point in the KTU result workflow.
+            No bloat. No complexity you didn't ask for.<br />
+            Just the tools you actually need.
           </p>
-        </div>
+        </header>
 
-        {/* ── 3-column feature grid ── */}
-        <div className="ft__grid">
-          {CARDS.map((card) => (
-            <div key={card.title} className="ft__card">
-              <div className={`ft__card-icon ft__card-icon--${card.color}`}>
-                {card.icon}
+        {/* ─── Bento grid ──────────────────────────────────── */}
+        <div className="ft__bento">
+
+          {/* ══ Card 1 — HERO: PDF → Excel (2 × 2) ══ */}
+          <article className="ft__card ft__card--hero">
+            <span className="ft__card-num">01</span>
+
+            {/* Transformation visual */}
+            <div className="ft__visual">
+
+              {/* PDF mock */}
+              <div className="ft__pdf">
+                <div className="ft__pdf-bar">
+                  <span className="ft__pdf-badge">PDF</span>
+                  <span className="ft__pdf-filename">KTU_S5_Results.pdf</span>
+                </div>
+                <div className="ft__pdf-body">
+                  {[75, 55, 85, 45, 65, 50].map((w, i) => (
+                    <div key={i} className="ft__pdf-line" style={{ width: `${w}%` }} />
+                  ))}
+                </div>
               </div>
-              <h3 className="ft__card-title">{card.title}</h3>
-              <p className="ft__card-text">{card.text}</p>
-            </div>
-          ))}
-        </div>
 
-        {/* ── Large two-column highlight ── */}
-        <div className="ft__highlight">
+              {/* Animated flow arrow */}
+              <div className="ft__flow">
+                <div className="ft__flow-track">
+                  <div className="ft__flow-dot ft__flow-dot--1" />
+                  <div className="ft__flow-dot ft__flow-dot--2" />
+                  <div className="ft__flow-dot ft__flow-dot--3" />
+                </div>
+                <svg className="ft__flow-chevron" width="18" height="18"
+                     viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <polyline points="12 5 19 12 12 19"/>
+                </svg>
+              </div>
 
-          {/* Left: visual mock of merged output */}
-          <div className="ft__hl-visual">
-            <div className="ft__hl-visual-label">Output preview</div>
-
-            {/* Mini spreadsheet */}
-            <div className="ft__mini-sheet">
-              <div className="ft__mini-row ft__mini-row--head">
-                {["Roll No", "Name", "Int.", "Ext.", "Total", "Grade"].map(h => (
-                  <div key={h} className="ft__mini-cell ft__mini-cell--h">{h}</div>
+              {/* Excel mock */}
+              <div className="ft__excel">
+                <div className="ft__excel-header">
+                  {["Roll No", "Name", "SGPA", "Result"].map((h) => (
+                    <div key={h} className="ft__excel-th">{h}</div>
+                  ))}
+                </div>
+                {ROWS.map((row, i) => (
+                  <div
+                    key={row.roll}
+                    className={`ft__excel-row${!row.pass ? " ft__excel-row--fail" : i % 2 ? " ft__excel-row--alt" : ""}`}
+                    style={{ animationDelay: `${0.3 + i * 0.12}s` }}
+                  >
+                    <div className="ft__excel-td ft__excel-td--mono">{row.roll}</div>
+                    <div className="ft__excel-td ft__excel-td--name">{row.name}</div>
+                    <div className={`ft__excel-td ft__excel-td--num${!row.pass ? " ft__excel-td--num-fail" : ""}`}>
+                      {row.sgpa}
+                    </div>
+                    <div className={`ft__excel-td ft__result--${row.pass ? "pass" : "fail"}`}>
+                      {row.pass ? "PASS" : "FAIL"}
+                    </div>
+                  </div>
                 ))}
               </div>
-              {[
-                { roll: "CS001", name: "Arun M.", int: 23, ext: 61, total: 84, grade: "A+", pass: true  },
-                { roll: "CS002", name: "Bhavya N.", int: 21, ext: 57, total: 78, grade: "A",  pass: true  },
-                { roll: "CS003", name: "Christy J.", int: 19, ext: 52, total: 71, grade: "B+", pass: true  },
-                { roll: "CS004", name: "Devika S.", int: 24, ext: 65, total: 89, grade: "A+", pass: true  },
-                { roll: "CS005", name: "Edwin T.", int: 14, ext: 38, total: 52, grade: "C",  pass: false },
-              ].map(row => (
-                <div key={row.roll} className={`ft__mini-row${!row.pass ? " ft__mini-row--fail" : ""}`}>
-                  <div className="ft__mini-cell ft__mini-cell--mono">{row.roll}</div>
-                  <div className="ft__mini-cell ft__mini-cell--name">{row.name}</div>
-                  <div className="ft__mini-cell ft__mini-cell--int">{row.int}</div>
-                  <div className="ft__mini-cell ft__mini-cell--ext">{row.ext}</div>
-                  <div className="ft__mini-cell ft__mini-cell--total">{row.total}</div>
-                  <div className={`ft__mini-cell ft__mini-cell--grade ft__grade--${row.grade.replace("+","p")}`}>{row.grade}</div>
-                </div>
-              ))}
-              <div className="ft__mini-status">
-                <span>5 students · CS301 · Merged output</span>
-                <span className="ft__mini-chip ft__mini-chip--green">Internal ✓</span>
-              </div>
             </div>
 
-            {/* Floating merge badge */}
-            <div className="ft__merge-badge">
-              <div className="ft__merge-badge-icon">
-                <IconMerge />
-              </div>
-              <div>
-                <p className="ft__merge-badge-title">Auto-merged</p>
-                <p className="ft__merge-badge-sub">Internal + External</p>
-              </div>
+            {/* Text */}
+            <div className="ft__card-body">
+              <h3 className="ft__card-title">PDF becomes structured data.</h3>
+              <p className="ft__card-desc">
+                Upload any KTU result PDF. Every student, subject, grade, and credit
+                is extracted and written into a perfectly structured Excel workbook.
+                Zero copy-pasting.
+              </p>
             </div>
-          </div>
+          </article>
 
-          {/* Right: text content */}
-          <div className="ft__hl-body">
-            <p className="ft__hl-eyebrow">Highlight feature</p>
-            <h3 className="ft__hl-title">
-              Internal marks,<br />merged automatically.
-            </h3>
-            <p className="ft__hl-text">
-              Manually combining internal marks with published KTU results used
-              to mean hours of copy-pasting. Now it takes one extra file upload.
-              The parser matches students by roll number and adds an internal
-              marks column — no spreadsheet formulas required.
+          {/* ══ Card 2 — SPEED (dark, 1 × 1) ══ */}
+          <article className="ft__card ft__card--speed">
+            <span className="ft__card-num ft__card-num--ghost">02</span>
+            <div className="ft__speed-stat">
+              <span className="ft__speed-num">0.8</span>
+              <span className="ft__speed-unit">s</span>
+            </div>
+            <p className="ft__speed-tag">avg. parse time</p>
+            <p className="ft__card-desc ft__card-desc--muted">
+              Processed and ready to download before you can blink twice.
             </p>
-            <ul className="ft__hl-list">
-              {[
-                "Matches by roll number — no manual alignment",
-                "Calculates total marks automatically",
-                "Flags mismatches so nothing is silently wrong",
-                "Works even if row order differs between PDFs",
-              ].map(item => (
-                <li key={item} className="ft__hl-item">
-                  <span className="ft__hl-tick"><Tick /></span>
-                  {item}
-                </li>
+            <div className="ft__speed-glow" aria-hidden="true" />
+          </article>
+
+          {/* ══ Card 3 — ACCURACY (1 × 1) ══ */}
+          <article className="ft__card ft__card--accuracy">
+            <span className="ft__card-num">03</span>
+            <div className="ft__watermark" aria-hidden="true">100</div>
+            <div className="ft__accuracy-body">
+              <div className="ft__icon-box ft__icon-box--green">
+                <IconCheck />
+              </div>
+              <h3 className="ft__card-title">100% grade accuracy.</h3>
+              <p className="ft__card-desc">
+                Validated against KTU's published schema on every parse.
+              </p>
+            </div>
+          </article>
+
+          {/* ══ Card 4 — SECURITY (1 × 1) ══ */}
+          <article className="ft__card ft__card--security">
+            <span className="ft__card-num">04</span>
+            <div className="ft__icon-box ft__icon-box--green">
+              <IconShield />
+            </div>
+            <h3 className="ft__card-title">Zero data retention.</h3>
+            <p className="ft__card-desc">
+              Files are processed in memory and discarded immediately.
+              Nothing stored. Nothing shared.
+            </p>
+            <div className="ft__badge-row">
+              <span className="ft__badge">Firebase Auth</span>
+              <span className="ft__badge">AES-256</span>
+            </div>
+          </article>
+
+          {/* ══ Card 5 — MERGE (1 × 1) ══ */}
+          <article className="ft__card ft__card--merge">
+            <span className="ft__card-num">05</span>
+            <div className="ft__icon-box ft__icon-box--blue">
+              <IconMerge />
+            </div>
+            <h3 className="ft__card-title">Internal marks, merged in.</h3>
+            <p className="ft__card-desc">
+              Upload a second PDF and the parser combines both workbooks — matching students by roll number automatically.
+            </p>
+            <div className="ft__merge-flow">
+              <span className="ft__merge-pill ft__merge-pill--red">PDF</span>
+              <span className="ft__merge-plus">+</span>
+              <span className="ft__merge-pill ft__merge-pill--red">PDF</span>
+              <span className="ft__merge-plus">→</span>
+              <span className="ft__merge-pill ft__merge-pill--green">Excel</span>
+            </div>
+          </article>
+
+          {/* ══ Card 6 — SEMESTERS (1 × 1) ══ */}
+          <article className="ft__card ft__card--semesters">
+            <span className="ft__card-num">06</span>
+            <div className="ft__icon-box ft__icon-box--purple">
+              <IconGrid />
+            </div>
+            <div className="ft__sem-grid">
+              {SEMESTERS.map((s, i) => (
+                <span
+                  key={s}
+                  className="ft__sem-pill"
+                  style={{ animationDelay: `${i * 0.07}s` }}
+                >
+                  {s}
+                </span>
               ))}
-            </ul>
-          </div>
+            </div>
+            <h3 className="ft__card-title">Every semester.</h3>
+            <p className="ft__card-desc">
+              S1 through S8. All departments, any batch year. The parser adapts automatically.
+            </p>
+          </article>
 
         </div>
-        {/* end highlight */}
+        {/* end bento */}
 
       </div>
     </section>
   );
 }
-
-export default Features;
