@@ -1,5 +1,7 @@
 # backend/internal_parser.py
 import re
+import os
+import pandas as pd
 import pdfplumber
 
 try:
@@ -48,6 +50,8 @@ def parse_subject_footer(text: str) -> dict:
     for line in text.split("\n"):
         m = FOOTER_PATTERN.match(line.strip())
         if not m:
+            m = FOOTER_FALLBACK.match(line.strip())
+        if not m:
             continue
 
         code    = m.group(1).strip()
@@ -62,6 +66,112 @@ def parse_subject_footer(text: str) -> dict:
             subject_map[code] = (existing_name, f"{existing_faculty}, {faculty}")
 
     return subject_map
+
+
+def _find_data_sheet(excel_path: str) -> str:
+    """Find sheet with student records by USN detection."""
+    xl = pd.ExcelFile(excel_path)
+    best_sheet = xl.sheet_names[0]
+    max_count = 0
+
+    for sheet in xl.sheet_names:
+        try:
+            df = pd.read_excel(excel_path, sheet_name=sheet, header=None, nrows=15)
+            count = sum(1 for _, row in df.iterrows()
+                        if len(row) > 1 and isinstance(row.iloc[1], str) and USN_PATTERN.match(row.iloc[1].strip()))
+            if count > max_count:
+                max_count = count
+                best_sheet = sheet
+        except Exception:
+            continue
+
+    return best_sheet
+
+
+def parse_sessional_excel(excel_path: str) -> tuple:
+    """Parse sessional Excel file into internal records."""
+    sheet = _find_data_sheet(excel_path)
+    df = pd.read_excel(excel_path, sheet_name=sheet, header=None)
+
+    # Find header row: contains 'Reg no'/'Roll No' and subject codes
+    header_row_idx = None
+    for i in range(min(len(df), 10)):
+        row = df.iloc[i].astype(str).str.strip().tolist()
+        if any('Reg no' in str(v) or 'Roll No' in str(v) for v in row):
+            header_row_idx = i
+            break
+
+    if header_row_idx is None:
+        raise ValueError('Could not find sessional Excel header row')
+
+    # Read subject codes from header row (skip first 3 columns: roll, usn, name)
+    top = df.iloc[header_row_idx].astype(str).tolist()
+    subject_codes = [re.sub(r'\s+', '', str(x).strip()) for x in top[3:] if x and 'Total' not in str(x)]
+    subject_codes = [c for c in subject_codes if SUBJECT_CODE.match(c)]
+
+    if not subject_codes:
+        raise ValueError('No subject codes found in sessional Excel header row')
+
+    # Subject metadata block may be in the same sheet after data
+    # Parse using the same footer parsing logic used for PDFs (FOOTER_PATTERN / FOOTER_FALLBACK)
+    subject_map = {}
+    footer_lines = []
+    for i in range(max(0, len(df)-15), len(df)):
+        row = df.iloc[i].dropna().astype(str).str.strip()
+        if row.empty:
+            continue
+        footer_lines.append(" ".join(row.tolist()))
+
+    if footer_lines:
+        subject_map = parse_subject_footer("\n".join(footer_lines))
+
+    # Ensure subject_map includes all detected codes with safe defaults
+    if not subject_map:
+        subject_map = {c: (c, 'N/A') for c in subject_codes}
+    else:
+        # keep only relevant codes and fill missing ones
+        subject_map = {c: (n, f) for c, (n, f) in subject_map.items() if c in subject_codes}
+        for c in subject_codes:
+            if c not in subject_map:
+                subject_map[c] = (c, 'N/A')
+
+    # student rows begin after the header row and mark row
+    records = []
+    name_mapping = {}
+    for i in range(header_row_idx + 2, len(df)):
+        row = df.iloc[i]
+        if pd.isna(row.iloc[0]) or pd.isna(row.iloc[1]):
+            continue
+        usn = str(row.iloc[1]).strip().upper()
+        if not USN_PATTERN.match(usn):
+            continue
+        name = str(row.iloc[2]).strip()
+        name_mapping[usn] = name
+
+        for j, code in enumerate(subject_codes):
+            col = 3 + j
+            if col >= len(row):
+                val = ''
+            else:
+                val = row.iloc[col]
+            if pd.isna(val) or str(val).strip() == '*':
+                mark = 0
+                elected = False
+            else:
+                try:
+                    mark = int(float(val))
+                    elected = True
+                except Exception:
+                    mark = 0
+                    elected = False
+            subj_name, faculty = subject_map.get(code, (code, 'N/A'))
+            records.append(InternalRecord(usn=usn, student_name=name,
+                                          course_code=code, subject_name=subj_name,
+                                          faculty_name=faculty, internal_mark=mark,
+                                          elected=elected))
+
+    batch_year = detect_batch_year(str(df.iloc[0].astype(str).str.cat(sep=' ')))
+    return records, name_mapping, batch_year
 
 
 def _find_header_codes(text: str) -> list:
