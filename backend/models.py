@@ -51,7 +51,7 @@ CREDIT_REGISTRY = {
     "EST100": 3,   "EST110": 3,
     "EST120": 4,   "EST130": 4,
     "EST102": 4,
-    "HUN101": 0,   "HUN102": 0,   # Life Skills, Prof. Communication — non-credit
+    "HUN101": 0,   "HUN102": 0,   
     "PHL120": 1,   "CYL120": 1,
     "ESL120": 1,   "ESL130": 1,
 

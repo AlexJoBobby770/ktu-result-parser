@@ -4,6 +4,9 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.chart import BarChart, PieChart, Reference
+from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.series import DataPoint
 from collections import defaultdict
 from datetime import datetime
 
@@ -198,7 +201,15 @@ def generate_external_excel(ext_records: list, output_path: str, batch_year: str
     for r in _filter_batch(ext_records, batch_year) if batch_year else ext_records:
         dept_map[r.department].append(r)
 
+    # Build stats for summary / arrears / charts
+    dept_rows, overall_row, arrears_map = _build_stats(
+        ext_records, name_mapping=None, batch_year=batch_year
+    )
+
     titles = {}
+    special_sheets = set()
+    lbl = f" — Batch 20{batch_year}" if batch_year else ""
+
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for dept in sorted(dept_map):
             recs = dept_map[dept]
@@ -220,11 +231,28 @@ def generate_external_excel(ext_records: list, output_path: str, batch_year: str
                 rows.append(row)
 
             pd.DataFrame(rows).to_excel(writer, sheet_name=dept, index=False, startrow=5)
-            lbl = f" — Batch 20{batch_year}" if batch_year else ""
             titles[dept] = f"{dept} — University Examination Results{lbl}"
 
-    _post_format(output_path, titles, analysis_sheets=set())
+        # ── New sheets ──
+        _college_summary_sheet(writer, dept_rows, overall_row, batch_year)
+        titles["College Summary"] = f"College-Level Pass Percentage{lbl}"
+        special_sheets.add("College Summary")
+
+        _arrears_summary_sheet(writer, arrears_map, batch_year)
+        titles["Arrears Summary"] = f"Arrears Categorisation{lbl}"
+        special_sheets.add("Arrears Summary")
+
+    # Post-format all sheets, then add charts
+    _post_format(output_path, titles, analysis_sheets=set(),
+                 special_sheets=special_sheets)
+
+    wb = load_workbook(output_path)
+    _add_dashboard_charts(wb, dept_rows, arrears_map)
+    wb.save(output_path)
+
     print(f"✅ External-only Excel: {output_path}")
+
+    return dept_rows, overall_row, arrears_map
 
 
 # ── MODE 2 ────────────────────────────────────────────────────────────────────
@@ -263,8 +291,15 @@ def generate_merged_excel(
     for usn, dept in ext_dep.items():
         dept_usns[dept].add(usn)
 
+    # Build stats for summary / arrears / charts
+    dept_rows, overall_row, arrears_map = _build_stats(
+        ext_records, name_mapping=name_mapping, batch_year=batch_year
+    )
+
     titles = {}
     analysis_sheets = set()
+    special_sheets  = set()
+    lbl = f" — Batch 20{batch_year}" if batch_year else ""
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
 
@@ -300,7 +335,6 @@ def generate_merged_excel(
                 rows.append(row)
 
             pd.DataFrame(rows).to_excel(writer, sheet_name=dept, index=False, startrow=5)
-            lbl = f" — Batch 20{batch_year}" if batch_year else ""
             titles[dept] = f"{dept} — Internal + University Results{lbl}"
 
         # Subject Analysis sheet
@@ -310,12 +344,29 @@ def generate_merged_excel(
                 df_analysis.to_excel(
                     writer, sheet_name="Subject Analysis", index=False, startrow=5
                 )
-                lbl = f" — Batch 20{batch_year}" if batch_year else ""
                 titles["Subject Analysis"] = f"Subject-wise Pass/Fail Analysis{lbl}"
                 analysis_sheets.add("Subject Analysis")
 
-    _post_format(output_path, titles, analysis_sheets)
+        # ── New sheets ──
+        _college_summary_sheet(writer, dept_rows, overall_row, batch_year)
+        titles["College Summary"] = f"College-Level Pass Percentage{lbl}"
+        special_sheets.add("College Summary")
+
+        _arrears_summary_sheet(writer, arrears_map, batch_year)
+        titles["Arrears Summary"] = f"Arrears Categorisation{lbl}"
+        special_sheets.add("Arrears Summary")
+
+    # Post-format all sheets, then add charts
+    _post_format(output_path, titles, analysis_sheets,
+                 special_sheets=special_sheets)
+
+    wb = load_workbook(output_path)
+    _add_dashboard_charts(wb, dept_rows, arrears_map)
+    wb.save(output_path)
+
     print(f"✅ Merged Excel: {output_path}")
+
+    return dept_rows, overall_row, arrears_map
 
 
 # ── top-10 highlighter ────────────────────────────────────────────────────────
@@ -381,11 +432,230 @@ def _highlight_top10(ws, start=7):
                 c.fill = _fill(TOP10_BG)
 
 
+# ── college summary builder ───────────────────────────────────────────────────
+
+def _build_stats(ext_records, name_mapping=None, batch_year=""):
+    """
+    Build per-department and overall college statistics from external records.
+    Returns (dept_rows, overall_row, arrears_map).
+      dept_rows : list of dicts with keys: Department, Total, Passed, Failed, Pass %
+      overall_row : dict with same keys for the college total
+      arrears_map : { usn: { 'name': ..., 'dept': ..., 'count': int, 'subjects': [...] } }
+    """
+    recs = _filter_batch(ext_records, batch_year) if batch_year else ext_records
+
+    # Per-student: department, arrear subjects, name
+    stu_dept    = {}
+    stu_arrears = defaultdict(list)   # usn → list of failed course codes
+    for r in recs:
+        stu_dept[r.usn] = r.department
+        if r.grade and r.grade not in PASSING_GRADES:
+            stu_arrears[r.usn].append(r.course_code)
+
+    # Per-dept stats
+    dept_students = defaultdict(set)
+    for usn, dept in stu_dept.items():
+        dept_students[dept].add(usn)
+
+    dept_rows = []
+    for dept in sorted(dept_students):
+        usns    = dept_students[dept]
+        total   = len(usns)
+        passed  = sum(1 for u in usns if len(stu_arrears.get(u, [])) == 0)
+        failed  = total - passed
+        pct     = round(passed / total * 100, 1) if total else 0.0
+        dept_rows.append({
+            "Department": dept, "Total Students": total,
+            "Passed": passed, "Failed": failed, "Pass %": f"{pct}%",
+        })
+
+    total_all  = len(stu_dept)
+    passed_all = sum(1 for u in stu_dept if len(stu_arrears.get(u, [])) == 0)
+    failed_all = total_all - passed_all
+    pct_all    = round(passed_all / total_all * 100, 1) if total_all else 0.0
+    overall_row = {
+        "Department": "COLLEGE TOTAL", "Total Students": total_all,
+        "Passed": passed_all, "Failed": failed_all, "Pass %": f"{pct_all}%",
+    }
+
+    # Arrears map
+    arrears_map = {}
+    for usn in stu_dept:
+        failed_subs = stu_arrears.get(usn, [])
+        arrears_map[usn] = {
+            "name":     (name_mapping or {}).get(usn, ""),
+            "dept":     stu_dept[usn],
+            "count":    len(failed_subs),
+            "subjects": failed_subs,
+        }
+
+    return dept_rows, overall_row, arrears_map
+
+
+def _college_summary_sheet(writer, dept_rows, overall_row, batch_year=""):
+    """Write a 'College Summary' sheet with dept-wise and overall pass %."""
+    rows = dept_rows + [overall_row]
+    df = pd.DataFrame(rows)
+    df.to_excel(writer, sheet_name="College Summary", index=False, startrow=5)
+
+
+def _arrears_summary_sheet(writer, arrears_map, batch_year=""):
+    """
+    Write an 'Arrears Summary' sheet.
+    • Summary table: count per arrear bucket (All Clear, 1, 2, 3, 4, 5+)
+    • Detailed list: each student with arrear count, subjects, dept
+    """
+    # Bucket counts
+    buckets = defaultdict(int)
+    for info in arrears_map.values():
+        c = info["count"]
+        if   c == 0: buckets["All Clear"] += 1
+        elif c == 1: buckets["1 Arrear"]  += 1
+        elif c == 2: buckets["2 Arrears"] += 1
+        elif c == 3: buckets["3 Arrears"] += 1
+        elif c == 4: buckets["4 Arrears"] += 1
+        else:        buckets["5+ Arrears"] += 1
+
+    summary_rows = [{"Category": k, "Count": v}
+                    for k, v in [("All Clear", buckets.get("All Clear", 0)),
+                                 ("1 Arrear",  buckets.get("1 Arrear", 0)),
+                                 ("2 Arrears", buckets.get("2 Arrears", 0)),
+                                 ("3 Arrears", buckets.get("3 Arrears", 0)),
+                                 ("4 Arrears", buckets.get("4 Arrears", 0)),
+                                 ("5+ Arrears", buckets.get("5+ Arrears", 0))]]
+
+    # Detailed list (only students with ≥1 arrear, sorted by count desc)
+    detail_rows = []
+    for usn, info in sorted(arrears_map.items(), key=lambda x: (-x[1]["count"], x[0])):
+        if info["count"] == 0:
+            continue
+        detail_rows.append({
+            "Register No":    usn,
+            "Name":           info["name"],
+            "Department":     info["dept"],
+            "Arrear Count":   info["count"],
+            "Failed Subjects": ", ".join(info["subjects"]),
+        })
+
+    # Write summary table at top, then detail list below
+    df_summary = pd.DataFrame(summary_rows)
+    df_detail  = pd.DataFrame(detail_rows)
+
+    df_summary.to_excel(writer, sheet_name="Arrears Summary",
+                        index=False, startrow=5)
+    gap = 5 + len(df_summary) + 3   # 3-row gap
+    df_detail.to_excel(writer, sheet_name="Arrears Summary",
+                       index=False, startrow=gap)
+
+
+def _add_dashboard_charts(wb, dept_rows, arrears_map):
+    """
+    Add a 'Dashboard' sheet with:
+      1. Bar chart  — department-wise pass %
+      2. Pie chart  — arrears distribution
+    """
+    ws = wb.create_sheet("Dashboard")
+    ws.sheet_properties.tabColor = "3B82F6"
+
+    # ── Write dept data for bar chart ─────────────────────────────
+    ws["A1"] = "Department"
+    ws["B1"] = "Pass %"
+    for i, row in enumerate(dept_rows, 2):
+        ws[f"A{i}"] = row["Department"]
+        ws[f"B{i}"] = float(row["Pass %"].rstrip("%"))
+
+    end_row = 1 + len(dept_rows)
+
+    bar = BarChart()
+    bar.type = "col"
+    bar.grouping = "clustered"
+    bar.title = "Department-wise Pass Percentage"
+    bar.y_axis.title = "Pass %"
+    bar.y_axis.scaling.min = 0
+    bar.y_axis.scaling.max = 100
+    bar.style = 10
+    bar.width = 20
+    bar.height = 12
+
+    cats = Reference(ws, min_col=1, min_row=2, max_row=end_row)
+    data = Reference(ws, min_col=2, min_row=1, max_row=end_row)
+    bar.add_data(data, titles_from_data=True)
+    bar.set_categories(cats)
+    bar.shape = 4
+    ws.add_chart(bar, "D1")
+
+    # ── Write arrears bucket data for pie chart ───────────────────
+    pie_start = end_row + 3
+    buckets = defaultdict(int)
+    for info in arrears_map.values():
+        c = info["count"]
+        if   c == 0: buckets["All Clear"] += 1
+        elif c == 1: buckets["1 Arrear"]  += 1
+        elif c == 2: buckets["2 Arrears"] += 1
+        elif c == 3: buckets["3 Arrears"] += 1
+        elif c == 4: buckets["4 Arrears"] += 1
+        else:        buckets["5+ Arrears"] += 1
+
+    ws[f"A{pie_start}"] = "Category"
+    ws[f"B{pie_start}"] = "Count"
+    bucket_order = ["All Clear", "1 Arrear", "2 Arrears", "3 Arrears",
+                    "4 Arrears", "5+ Arrears"]
+    r = pie_start + 1
+    for cat in bucket_order:
+        cnt = buckets.get(cat, 0)
+        if cnt > 0:
+            ws[f"A{r}"] = cat
+            ws[f"B{r}"] = cnt
+            r += 1
+
+    pie_end = r - 1
+
+    if pie_end >= pie_start + 1:
+        pie = PieChart()
+        pie.title = "Arrears Distribution"
+        pie.style = 10
+        pie.width = 16
+        pie.height = 12
+        cats = Reference(ws, min_col=1, min_row=pie_start + 1, max_row=pie_end)
+        data = Reference(ws, min_col=2, min_row=pie_start, max_row=pie_end)
+        pie.add_data(data, titles_from_data=True)
+        pie.set_categories(cats)
+
+        # Data labels with percentages
+        pie.dataLabels = DataLabelList()
+        pie.dataLabels.showPercent = True
+        pie.dataLabels.showCatName = True
+        pie.dataLabels.showVal = False
+
+        ws.add_chart(pie, f"D{end_row + 2}")
+
+    # Style the data cells
+    for row in ws.iter_rows(min_row=1, max_row=pie_end, max_col=2):
+        for cell in row:
+            cell.font = _font(bold=(cell.row == 1 or cell.row == pie_start))
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = THIN
+
+    # Column widths
+    ws.column_dimensions["A"].width = 16
+    ws.column_dimensions["B"].width = 12
+
+
 # ── post-format pass ──────────────────────────────────────────────────────────
 
-def _post_format(path: str, titles: dict, analysis_sheets: set):
+def _post_format(path: str, titles: dict, analysis_sheets: set,
+                 special_sheets: set = None):
+    """
+    Apply formatting to all sheets.
+    special_sheets: set of sheet names that need custom formatting
+                    (College Summary, Arrears Summary) rather than result-data styling.
+    """
+    if special_sheets is None:
+        special_sheets = set()
     wb = load_workbook(path)
     for sname in wb.sheetnames:
+        if sname == "Dashboard":
+            continue   # charts sheet — skip header formatting
         ws    = wb[sname]
         title = titles.get(sname, sname)
         _write_header(ws, title, ws.max_column)
@@ -393,9 +663,15 @@ def _post_format(path: str, titles: dict, analysis_sheets: set):
 
         if sname in analysis_sheets:
             _fmt_analysis_data(ws, start=7)
-            # Custom column widths for analysis
             for col, w in zip("ABCDEFGH", [13, 36, 30, 11, 10, 10, 10, 20]):
                 ws.column_dimensions[get_column_letter(ord(col)-64)].width = w
+        elif sname in special_sheets:
+            _fmt_analysis_data(ws, start=7)
+            ws.column_dimensions["A"].width = 18
+            ws.column_dimensions["B"].width = 16
+            ws.column_dimensions["C"].width = 16
+            ws.column_dimensions["D"].width = 14
+            ws.column_dimensions["E"].width = 14
         else:
             _fmt_result_data(ws, start=7)
             _highlight_top10(ws, start=7)

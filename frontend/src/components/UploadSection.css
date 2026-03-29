@@ -407,6 +407,28 @@
   color: #1a7a42; flex-shrink: 0;
 }
 
+/* ── Download Template button ───────────────────────────── */
+.us__btn-template {
+  all: unset; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 9px;
+  border: 1.5px solid #c5e8d5;
+  background: #f7fdf9;
+  color: #1a7a42;
+  font-size: 0.8rem; font-weight: 600;
+  transition: background 0.17s, border-color 0.17s, transform 0.13s, box-shadow 0.17s;
+  animation: us-slide-in 0.22s ease;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+.us__btn-template:hover {
+  background: #edf7f2;
+  border-color: #1a7a42;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(26,122,66,0.12);
+}
+.us__btn-template svg { flex-shrink: 0; }
+
 /* ── Divider ─────────────────────────────────────────────── */
 .us__divider { height: 1px; background: #f0f0f5; border-radius: 2px; margin: 4px 0; }
 

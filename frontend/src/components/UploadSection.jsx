@@ -149,6 +149,22 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleDownloadTemplate = () => {
+    fetch(`${API_URL}/template`)
+      .then(r => r.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement("a"), {
+          href: url, download: "KTU_Internal_Marks_Template.xlsx"
+        });
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      })
+      .catch(err => console.error("Template download failed:", err));
+  };
+
   return (
     <section className="us" ref={ref || sectionRef} id="upload">
       <div className="us__container">
@@ -355,6 +371,24 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
                 </div>
               )}
             </label>
+          )}
+
+          {/* ── Download Template button ── */}
+          {showExtraSheet && (
+            <button
+              type="button"
+              className="us__btn-template"
+              onClick={(e) => { e.stopPropagation(); handleDownloadTemplate(); }}
+              title="Download a pre-formatted Excel template for internal marks"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download Excel Template
+            </button>
           )}
 
           {/* ── Divider ── */}
