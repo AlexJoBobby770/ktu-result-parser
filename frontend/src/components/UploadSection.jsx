@@ -100,7 +100,7 @@ const UploadSection = forwardRef(function UploadSection({ onLogout }, ref) {
       if (showExtraSheet && excelFile) form.append("internal_file", excelFile);
 
       // ── POST to /upload (not /download) ──────────────────────────────────
-      const res = await fetch(`${API_URL}/upload`, { method: "POST", body: formData, });
+      const res = await fetch(`${API_URL}/upload`, { method: "POST", body: form, });
 
       const data = await res.json();
       console.log("Upload response:", data);
