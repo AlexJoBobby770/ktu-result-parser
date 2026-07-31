@@ -8,7 +8,7 @@ gsap.registerPlugin(ScrollTrigger);
 // API base URL. Override per-environment with VITE_API_URL (set in the host's
 // build env). Falls back to the deployed Render backend so a missing env var
 // doesn't silently break every request with "undefined/upload".
-const API_URL = import.meta.env.VITE_API_URL || "https://ktu-backend.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || "https://ktu-result-parser-1.onrender.com";
 
 function formatBytes(bytes) {
   if (!bytes) return "—";
