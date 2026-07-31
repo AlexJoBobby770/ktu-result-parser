@@ -37,6 +37,11 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "KTU Result Processor API is running", "docs": "/docs"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "message": "Backend is running"}
