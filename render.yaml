@@ -10,6 +10,6 @@ services:
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.7
+        value: 3.11.9
       - key: ALLOWED_ORIGINS
         sync: false
