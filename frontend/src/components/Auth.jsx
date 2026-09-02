@@ -183,7 +183,7 @@ function Auth({ onAuthSuccess }) {
 
           {/* Fine print */}
           <p className="au__footnote">
-            Only AISAT Google accounts are authorised.
+            Sign in with any valid Google account to continue.
             By signing in you agree to our&nbsp;
             <a href="#" className="au__footnote-link">Terms</a> and&nbsp;
             <a href="#" className="au__footnote-link">Privacy Policy</a>.
