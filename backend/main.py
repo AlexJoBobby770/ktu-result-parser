@@ -21,11 +21,18 @@ except ModuleNotFoundError:
 
 app = FastAPI(title="KTU Result Processor API")
 
-ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+raw_origins = os.environ.get("ALLOWED_ORIGINS", "*").strip()
+if not raw_origins or raw_origins == "*":
+    ALLOWED_ORIGINS = ["*"]
+else:
+    ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in raw_origins.split(",") if o.strip()]
+    if not ALLOWED_ORIGINS:
+        ALLOWED_ORIGINS = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True if "*" not in ALLOWED_ORIGINS else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -53,85 +60,92 @@ async def upload_result(
     batch_year:    str        = Form(""),
     internal_file: UploadFile = File(None),
 ):
-    batch_year = batch_year.strip()
-    if len(batch_year) == 4 and batch_year.isdigit():
-        batch_year = batch_year[2:]
-    elif len(batch_year) == 2 and batch_year.isdigit():
-        pass
-    else:
-        batch_year = ""
+    try:
+        batch_year = batch_year.strip()
+        if len(batch_year) == 4 and batch_year.isdigit():
+            batch_year = batch_year[2:]
+        elif len(batch_year) == 2 and batch_year.isdigit():
+            pass
+        else:
+            batch_year = ""
 
-    session_id = uuid.uuid4().hex[:8]
+        session_id = uuid.uuid4().hex[:8]
 
-    ext_path = os.path.join(UPLOAD_DIR, f"{session_id}_result.pdf")
-    with open(ext_path, "wb") as f:
-        shutil.copyfileobj(pdf_file.file, f)
+        ext_path = os.path.join(UPLOAD_DIR, f"{session_id}_result.pdf")
+        with open(ext_path, "wb") as f:
+            shutil.copyfileobj(pdf_file.file, f)
 
-    print(f"\n[{session_id}] Parsing KTU result PDF...")
-    external_records = parse_ktu_pdf(ext_path)
+        print(f"\n[{session_id}] Parsing KTU result PDF...")
+        external_records = parse_ktu_pdf(ext_path)
 
-    # PASSING_GRADES is now imported at the top — not inside this function
-    student_dept    = {}
-    student_arrears = {}
-    for r in external_records:
-        student_dept[r.usn] = r.department
-        student_arrears.setdefault(r.usn, 0)
-        if r.grade not in PASSING_GRADES and r.grade != "":
-            student_arrears[r.usn] += 1
+        if not external_records:
+            raise ValueError("No valid student records found in the uploaded PDF.")
 
-    total_students  = len(student_dept)
-    passed_students = sum(1 for v in student_arrears.values() if v == 0)
+        # PASSING_GRADES is now imported at the top — not inside this function
+        student_dept    = {}
+        student_arrears = {}
+        for r in external_records:
+            student_dept[r.usn] = r.department
+            student_arrears.setdefault(r.usn, 0)
+            if r.grade not in PASSING_GRADES and r.grade != "":
+                student_arrears[r.usn] += 1
 
-    excel_filename = f"{session_id}_results.xlsx"
-    excel_path     = os.path.join(OUTPUT_DIR, excel_filename)
+        total_students  = len(student_dept)
+        passed_students = sum(1 for v in student_arrears.values() if v == 0)
 
-    if internal_file and internal_file.filename:
-        int_path = os.path.join(UPLOAD_DIR, f"{session_id}_sessional.xlsx")
-        with open(int_path, "wb") as f:
-            shutil.copyfileobj(internal_file.file, f)
+        excel_filename = f"{session_id}_results.xlsx"
+        excel_path     = os.path.join(OUTPUT_DIR, excel_filename)
 
-        print(f"[{session_id}] Parsing sessional Excel...")
-        internal_records, name_mapping, detected_year = parse_sessional_excel(int_path)
+        if internal_file and internal_file.filename:
+            int_path = os.path.join(UPLOAD_DIR, f"{session_id}_sessional.xlsx")
+            with open(int_path, "wb") as f:
+                shutil.copyfileobj(internal_file.file, f)
 
-        effective_year = batch_year if batch_year else detected_year
-        print(f"[{session_id}] Batch year: 20{effective_year}")
+            print(f"[{session_id}] Parsing sessional Excel...")
+            internal_records, name_mapping, detected_year = parse_sessional_excel(int_path)
 
-        dept_rows, overall_row, arrears_map = generate_merged_excel(
-            external_records, internal_records, name_mapping,
-            excel_path, batch_year=effective_year
-        )
-        mode = "merged"
-    else:
-        dept_rows, overall_row, arrears_map = generate_external_excel(
-            external_records, excel_path, batch_year=batch_year
-        )
-        mode = "external_only"
+            effective_year = batch_year if batch_year else detected_year
+            print(f"[{session_id}] Batch year: 20{effective_year}")
 
-    print(f"[{session_id}] Done. Mode={mode}")
+            dept_rows, overall_row, arrears_map = generate_merged_excel(
+                external_records, internal_records, name_mapping,
+                excel_path, batch_year=effective_year
+            )
+            mode = "merged"
+        else:
+            dept_rows, overall_row, arrears_map = generate_external_excel(
+                external_records, excel_path, batch_year=batch_year
+            )
+            mode = "external_only"
 
-    # Build arrears breakdown for the JSON response
-    arrears_breakdown = {}
-    for info in arrears_map.values():
-        c = info["count"]
-        if   c == 0: key = "all_clear"
-        elif c == 1: key = "1_arrear"
-        elif c == 2: key = "2_arrears"
-        elif c == 3: key = "3_arrears"
-        elif c == 4: key = "4_arrears"
-        else:        key = "5+_arrears"
-        arrears_breakdown[key] = arrears_breakdown.get(key, 0) + 1
+        print(f"[{session_id}] Done. Mode={mode}")
 
-    return {
-        "status":             "success",
-        "session_id":         session_id,
-        "message":            "Files processed successfully",
-        "total_students":     total_students,
-        "passed_students":    passed_students,
-        "pass_percentage":    overall_row["Pass %"],
-        "dept_stats":         dept_rows,
-        "arrears_breakdown":  arrears_breakdown,
-        "mode":               mode,
-    }
+        # Build arrears breakdown for the JSON response
+        arrears_breakdown = {}
+        for info in arrears_map.values():
+            c = info["count"]
+            if   c == 0: key = "all_clear"
+            elif c == 1: key = "1_arrear"
+            elif c == 2: key = "2_arrears"
+            elif c == 3: key = "3_arrears"
+            elif c == 4: key = "4_arrears"
+            else:        key = "5+_arrears"
+            arrears_breakdown[key] = arrears_breakdown.get(key, 0) + 1
+
+        return {
+            "status":             "success",
+            "session_id":         session_id,
+            "message":            "Files processed successfully",
+            "total_students":     total_students,
+            "passed_students":    passed_students,
+            "pass_percentage":    overall_row["Pass %"],
+            "dept_stats":         dept_rows,
+            "arrears_breakdown":  arrears_breakdown,
+            "mode":               mode,
+        }
+    except Exception as e:
+        print(f"Error processing upload: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/download/{session_id}")
